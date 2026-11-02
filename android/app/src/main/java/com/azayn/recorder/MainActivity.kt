@@ -1,5 +1,23 @@
 package com.azayn.recorder
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -135,24 +153,47 @@ private fun RecorderApp() {
         Store.saveConfig(c)
     }
 
+    // Multi-select on the Recordings tab; while anything is selected the centre button deletes.
+    var selected by remember { mutableStateOf(emptySet<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
             val recording = active != null
+            val selecting = selected.isNotEmpty() && tab == 0
             NotchedNavBar(
                 tabs = listOf(Icons.Outlined.GraphicEq to "Recordings", Icons.Outlined.Settings to "Settings"),
                 selected = tab,
-                onSelect = { tab = it },
-                centerIcon = if (recording) Icons.Default.Stop else Icons.Default.Mic,
-                centerLabel = if (recording) Store.formatDuration(elapsed) else "Record",
-                centerLabelColor = if (recording) az.error else az.textTertiary,
-                centerDescription = if (recording) "Stop recording" else "Record a voice note",
+                onSelect = { tab = it; selected = emptySet() },
+                centerIcon = when {
+                    selecting -> Icons.Default.Delete
+                    recording -> Icons.Default.Stop
+                    else -> Icons.Default.Mic
+                },
+                centerLabel = when {
+                    selecting -> "Delete ${selected.size}"
+                    recording -> Store.formatDuration(elapsed)
+                    else -> "Record"
+                },
+                centerLabelColor = if (selecting || recording) az.error else az.textTertiary,
+                centerDescription = when {
+                    selecting -> "Delete ${selected.size} selected"
+                    recording -> "Stop recording"
+                    else -> "Record a voice note"
+                },
+                centerColors = if (selecting || recording) listOf(Color(0xFFFF6B7D), Color(0xFFE11D48)) else listOf(Color(0xFF2F9BFF), Color(0xFF4F46E5)),
+                centerScale = if (recording && !selecting) 1.18f else 1f,
+                centerGlow = if (recording && !selecting) Color(0xFFFF4D6A) else null,
                 onCenter = {
-                    if (recording) {
-                        RecorderService.stop(ctx)
-                    } else {
-                        tab = 0 // the saved recording (and its Rename prompt) shows on Recordings
-                        micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+                    when {
+                        selecting -> confirmDelete = true
+                        recording -> RecorderService.stop(ctx)
+                        else -> {
+                            tab = 0 // the saved recording (and its Rename prompt) shows on Recordings
+                            micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+                        }
                     }
                 },
                 modifier = Modifier.navigationBarsPadding(),
@@ -171,9 +212,66 @@ private fun RecorderApp() {
                         updateConfig(config.copy(never = config.never + Store.Blocked(name, emptyList())))
                     }
                 },
+                selected = selected,
+                onSelect = { selected = it },
                 modifier = mod,
             )
             else -> SettingsScreen(status = status, config = config, onChange = ::updateConfig, onSetup = { setupOpen = true }, modifier = mod)
+        }
+    }
+
+    if (confirmDelete) {
+        val doomed = recordings.filter { it.file.path in selected }
+        DeleteSheet(doomed, onDismiss = { confirmDelete = false }) {
+            confirmDelete = false
+            scope.launch {
+                withContext(Dispatchers.IO) { doomed.forEach(Store::delete) }
+                selected = emptySet()
+                reloadKey++
+            }
+        }
+    }
+}
+
+/** Action sheet confirming a multi-delete: what goes, from whom, and that it can't be undone. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeleteSheet(recs: List<Store.Recording>, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val n = recs.size
+    val who = recs.map { it.group.title }.distinct()
+    val from = when (who.size) {
+        0 -> ""
+        1 -> "from ${who[0]}"
+        2 -> "from ${who[0]} and ${who[1]}"
+        else -> "from ${who[0]}, ${who[1]} and ${who.size - 2} more"
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconWell(Icons.Default.Delete, tint = az.error, fill = az.errorBg, size = 48)
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        "Delete $n recording${if (n == 1) "" else "s"}?",
+                        style = MaterialTheme.typography.titleLarge, color = az.textPrimary,
+                    )
+                    Text(
+                        listOf(from, "This can't be undone.").filter { it.isNotEmpty() }.joinToString(". ").replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.bodyMedium, color = az.textSecondary,
+                    )
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Box(
+                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFFFF6B7D), Color(0xFFE11D48))))
+                    .clickable(onClick = onConfirm),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Delete $n recording${if (n == 1) "" else "s"}", color = Color.White, style = MaterialTheme.typography.labelLarge.copy(fontSize = 16.sp))
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
         }
     }
 }

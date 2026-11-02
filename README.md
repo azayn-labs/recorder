@@ -134,8 +134,11 @@ You can browse them in *My Files › Internal storage › CallRecorder*.
   contacts or recording names. Built-in player (seek, ±10 s), rename, share, delete, and
   "Never record" for a contact. A banner shows when the recorder is off (with a Start button)
   or is recording right now.
-- **Record button:** the round gradient button in the middle of the bottom bar. It turns into
-  Stop with a running timer while recording. It's a microphone recorder (foreground service, so
+- **Select and delete several:** long-press a recording (or a contact, to select all of their
+  recordings), tap more to add them, then tap the red Delete button that replaces Record. An action
+  sheet confirms how many and from whom. Back or ✕ cancels.
+- **Record button:** the round gradient button in the middle of the bottom bar. While recording
+  it turns red, grows and pulses, with a running timer underneath. It's a microphone recorder (foreground service, so
   it keeps going with the screen off; stop from the app or the notification). Saves to
   `Recordings/`, then offers to rename.
 - **Live notification:** while a call is being recorded, an ongoing notification shows the

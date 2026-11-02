@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Forward10
@@ -126,6 +127,9 @@ fun RecordingsScreen(
     onChanged: () -> Unit,
     onSetup: () -> Unit,
     onNeverRecord: (String) -> Unit,
+    /** Multi-select: paths of the selected recordings. Long-press starts it; the app's centre button deletes. */
+    selected: Set<String>,
+    onSelect: (Set<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
@@ -153,6 +157,14 @@ fun RecordingsScreen(
 
 
     BackHandler(enabled = openGroup != null) { openGroup = null }
+    // Registered later, so Back leaves selection before it leaves a contact's page.
+    BackHandler(enabled = selected.isNotEmpty()) { onSelect(emptySet()) }
+    // Recordings that disappeared (deleted elsewhere, renamed) drop out of the selection.
+    LaunchedEffect(visible) {
+        val paths = visible.mapTo(HashSet()) { it.file.path }
+        if (selected.any { it !in paths }) onSelect(selected.filterTo(HashSet()) { it in paths })
+    }
+    val sel = Selection(selected, onSelect)
 
     Scaffold(
         modifier = modifier,
@@ -162,12 +174,13 @@ fun RecordingsScreen(
     ) { inner ->
         val group = openGroup
         if (group == null) {
-            GroupList(visible, status, onSetup, onOpen = { openGroup = it }, onPlay = { playing = it }, Modifier.padding(inner))
+            GroupList(visible, status, onSetup, sel, onOpen = { openGroup = it }, onPlay = { playing = it }, Modifier.padding(inner))
         } else {
             GroupDetail(
                 group,
                 visible.filter { it.group == group },
-                onBack = { openGroup = null },
+                sel,
+                onBack = { openGroup = null; onSelect(emptySet()) },
                 onPlay = { playing = it },
                 onRename = { renaming = it },
                 onDelete = { confirmDelete = it },
@@ -224,6 +237,7 @@ private fun GroupList(
     recordings: List<Store.Recording>,
     status: Store.Status,
     onSetup: () -> Unit,
+    sel: Selection,
     onOpen: (Store.Group) -> Unit,
     onPlay: (Store.Recording) -> Unit,
     modifier: Modifier,
@@ -242,8 +256,11 @@ private fun GroupList(
     // Renamed recordings are findable by their name too.
     val namedMatches = if (q.isEmpty()) emptyList() else inApp.filter { it.customName?.contains(q, ignoreCase = true) == true }
 
+    // Everything this view shows, for "Select all".
+    val shownPaths = (namedMatches + groups.flatMap { g -> inApp.filter { it.group == g.group } }).map { it.file.path }.toSet()
+
     Column(modifier.fillMaxSize()) {
-        ScreenTitle("Recordings")
+        if (sel.active) SelectionHeader(sel, shownPaths) else ScreenTitle("Recordings")
         StatusBanner(status, onSetup)
         SearchField(query, { query = it })
         if (apps.size > 1) {
@@ -273,11 +290,14 @@ private fun GroupList(
                     Panel {
                         namedMatches.forEachIndexed { i, rec ->
                             if (i > 0) PanelDivider()
+                            val path = setOf(rec.file.path)
                             PanelRow(
                                 rec.customName!!,
                                 hint = "${rec.group.title} · ${whenLabel(ctx, rec.time)}",
-                                leading = { AppBadge(rec.app) },
-                                onClick = { onPlay(rec) },
+                                leading = { if (sel.active) SelectionMark(sel.all(path)) else AppBadge(rec.app) },
+                                selected = sel.all(path),
+                                onClick = { if (sel.active) sel.toggle(path) else onPlay(rec) },
+                                onLongClick = { sel.add(path) },
                             )
                         }
                     }
@@ -290,12 +310,16 @@ private fun GroupList(
                         groups.forEachIndexed { i, s ->
                             if (i > 0) PanelDivider()
                             val noun = if (s.group.app == Store.MEMOS) "recording" else "call"
+                            // A contact row selects all of that contact's recordings (in the current filter).
+                            val paths = inApp.filter { it.group == s.group }.mapTo(HashSet()) { it.file.path }
                             PanelRow(
                                 s.group.title,
                                 hint = "${appName(s.group.app)} · ${s.count} $noun${if (s.count == 1) "" else "s"} · ${whenLabel(ctx, s.latest)}",
-                                leading = { AppBadge(s.group.app) },
-                                onClick = { onOpen(s.group) },
-                            ) { Chevron() }
+                                leading = { if (sel.active) SelectionMark(sel.all(paths)) else AppBadge(s.group.app) },
+                                selected = sel.all(paths),
+                                onClick = { if (sel.active) sel.toggle(paths) else onOpen(s.group) },
+                                onLongClick = { sel.add(paths) },
+                            ) { if (!sel.active) Chevron() }
                         }
                     }
                 }
@@ -342,6 +366,7 @@ private fun EmptyState(title: String, detail: String?) {
 private fun GroupDetail(
     group: Store.Group,
     recs: List<Store.Recording>,
+    sel: Selection,
     onBack: () -> Unit,
     onPlay: (Store.Recording) -> Unit,
     onRename: (Store.Recording) -> Unit,
@@ -352,7 +377,7 @@ private fun GroupDetail(
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
-        ScreenTitle(
+        if (sel.active) SelectionHeader(sel, recs.mapTo(HashSet()) { it.file.path }) else ScreenTitle(
             group.title,
             subtitle = appName(group.app),
             navigation = { HeaderButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack) },
@@ -384,7 +409,16 @@ private fun GroupDetail(
                     Panel {
                         dayRecs.forEachIndexed { i, rec ->
                             if (i > 0) PanelDivider()
-                            RecordingRow(rec, onClick = { onPlay(rec) }, onRename = { onRename(rec) }, onDelete = { onDelete(rec) })
+                            val path = setOf(rec.file.path)
+                            RecordingRow(
+                                rec,
+                                selecting = sel.active,
+                                selected = sel.all(path),
+                                onClick = { if (sel.active) sel.toggle(path) else onPlay(rec) },
+                                onLongClick = { sel.add(path) },
+                                onRename = { onRename(rec) },
+                                onDelete = { onDelete(rec) },
+                            )
                         }
                     }
                 }
@@ -394,7 +428,15 @@ private fun GroupDetail(
 }
 
 @Composable
-private fun RecordingRow(rec: Store.Recording, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun RecordingRow(
+    rec: Store.Recording,
+    selecting: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val ctx = LocalContext.current
     val duration by produceState(0L, rec.file) { value = withContext(Dispatchers.IO) { Store.durationMs(rec.file) } }
     var menu by remember { mutableStateOf(false) }
@@ -403,10 +445,12 @@ private fun RecordingRow(rec: Store.Recording, onClick: () -> Unit, onRename: ()
     PanelRow(
         rec.customName ?: time,
         hint = listOfNotNull(if (rec.customName != null) time else null, length.ifEmpty { null }).joinToString(" · "),
-        leading = { IconWell(Icons.Default.PlayArrow) },
+        leading = { if (selecting) SelectionMark(selected) else IconWell(Icons.Default.PlayArrow) },
+        selected = selected,
         onClick = onClick,
+        onLongClick = onLongClick,
     ) {
-        Box {
+        if (!selecting) Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "More", tint = az.textTertiary) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
@@ -422,6 +466,32 @@ private fun RecordingRow(rec: Store.Recording, onClick: () -> Unit, onRename: ()
                     onClick = { menu = false; onDelete() },
                 )
             }
+        }
+    }
+}
+
+// ---- multi-select ----
+
+/** Selected recording paths, with helpers for rows that stand for one recording or several (a contact). */
+class Selection(val paths: Set<String>, private val set: (Set<String>) -> Unit) {
+    val active get() = paths.isNotEmpty()
+    fun all(of: Set<String>) = of.isNotEmpty() && paths.containsAll(of)
+    fun add(of: Set<String>) = set(paths + of)
+    fun toggle(of: Set<String>) = set(if (all(of)) paths - of else paths + of)
+    fun clear() = set(emptySet())
+}
+
+/** Replaces the screen title while selecting: close, count, select all. */
+@Composable
+private fun SelectionHeader(sel: Selection, shown: Set<String>) {
+    val n = sel.paths.size
+    ScreenTitle(
+        "$n selected",
+        subtitle = "Tap to select more, then Delete",
+        navigation = { HeaderButton(Icons.Default.Close, "Cancel selection") { sel.clear() } },
+    ) {
+        TextButton(onClick = { if (sel.all(shown)) sel.clear() else sel.add(shown) }) {
+            Text(if (sel.all(shown)) "Select none" else "Select all")
         }
     }
 }

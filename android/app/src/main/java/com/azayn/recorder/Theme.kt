@@ -1,6 +1,17 @@
 package com.azayn.recorder
 
 import android.content.Context
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.graphicsLayer
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Canvas
@@ -302,13 +313,21 @@ fun PanelRow(
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
     enabled: Boolean = true,
     titleColor: Color = az.textPrimary,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val tint by animateColorAsState(if (selected) az.primaryTint else Color.Transparent, label = "rowSelection")
     Row(
         Modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier)
+            .background(tint)
+            .then(
+                if (onClick != null || onLongClick != null) {
+                    Modifier.combinedClickable(enabled = enabled, onClick = onClick ?: {}, onLongClick = onLongClick)
+                } else Modifier,
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -331,6 +350,23 @@ fun PanelRow(
         if (trailing != null) {
             Spacer(Modifier.width(8.dp))
             trailing()
+        }
+    }
+}
+
+/** Multi-select marker in a row's leading slot: filled check when selected, an empty ring when not. */
+@Composable
+fun SelectionMark(selected: Boolean, size: Int = 40) {
+    val fill by animateColorAsState(if (selected) az.primary else Color.Transparent, label = "markFill")
+    val ring by animateColorAsState(if (selected) az.primary else az.textTertiary, label = "markRing")
+    val scale by animateFloatAsState(if (selected) 1f else 0.85f, label = "markScale")
+    Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size((size * 0.7).dp).graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(CircleShape).background(fill).border(2.dp, ring, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) Icon(Icons.Default.Check, "Selected", tint = Color.White, modifier = Modifier.size((size * 0.45).dp))
         }
     }
 }
@@ -426,7 +462,16 @@ fun NotchedNavBar(
     centerDescription: String,
     onCenter: () -> Unit,
     modifier: Modifier = Modifier,
+    centerColors: List<Color> = listOf(Color(0xFF2F9BFF), Color(0xFF4F46E5)),
+    centerScale: Float = 1f,
+    /** A soft pulsing halo behind the ball (while recording). */
+    centerGlow: Color? = null,
 ) {
+    val scale by animateFloatAsState(centerScale, animationSpec = spring(dampingRatio = 0.55f), label = "ballScale")
+    val c0 by animateColorAsState(centerColors[0], label = "ball0")
+    val c1 by animateColorAsState(centerColors[1], label = "ball1")
+    val pulse = rememberInfiniteTransition(label = "glow")
+    val glowT by pulse.animateFloat(0f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Restart), label = "glowT")
     val fill = az.surface
     val stroke = az.border
     Box(
@@ -468,10 +513,28 @@ fun NotchedNavBar(
                 }
             }
         }
+        if (centerGlow != null) {
+            // Two expanding, fading rings, half a cycle apart.
+            for (phase in listOf(0f, 0.5f)) {
+                val t = (glowT + phase) % 1f
+                Box(
+                    Modifier.align(Alignment.TopCenter).offset(y = (-(BALL_R + BALL_RISE)).dp)
+                        .size((BALL_R * 2).dp)
+                        .graphicsLayer {
+                            val sc = scale * (1f + 0.55f * t)
+                            scaleX = sc; scaleY = sc; alpha = 0.45f * (1f - t)
+                        }
+                        .clip(CircleShape).background(centerGlow),
+                )
+            }
+        }
         Box(
             Modifier.align(Alignment.TopCenter).offset(y = (-(BALL_R + BALL_RISE)).dp)
-                .size((BALL_R * 2).dp).shadow(6.dp, CircleShape).clip(CircleShape)
-                .background(Brush.linearGradient(listOf(Color(0xFF2F9BFF), Color(0xFF4F46E5))))
+                .size((BALL_R * 2).dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .shadow(if (centerGlow != null) 12.dp else 6.dp, CircleShape, spotColor = centerGlow ?: Color.Black)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(c0, c1)))
                 .clickable(onClickLabel = centerDescription, onClick = onCenter),
             contentAlignment = Alignment.Center,
         ) { Icon(centerIcon, centerDescription, tint = Color.White, modifier = Modifier.size(30.dp)) }
