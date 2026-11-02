@@ -1,4 +1,4 @@
-package com.callrec;
+package com.azayn.recorder.daemon;
 
 import android.media.AudioManager;
 
@@ -14,7 +14,7 @@ import java.util.Locale;
 
 /**
  * Call recorder daemon. Launched via adb as uid shell:
- *   CLASSPATH=/data/local/tmp/callrec.dex app_process / com.callrec.Main [outputDir]
+ *   CLASSPATH=/data/local/tmp/callrec.dex app_process / com.azayn.recorder.daemon.Main [outputDir]
  * Polls the audio mode and records every cellular (MODE_IN_CALL) and VoIP
  * (MODE_IN_COMMUNICATION) call to outputDir/&lt;App&gt;/&lt;contact&gt;/&lt;date&gt;.&lt;m4a|opus&gt;,
  * honoring the companion app's .config.json and reporting to .status.json.
@@ -48,7 +48,7 @@ public final class Main {
         root = new File(args.length > 0 ? args[0] : "/sdcard/CallRecorder");
         Env.init();
         writePid();
-        Log.i("callrec v" + VERSION + " started, pid " + android.os.Process.myPid() + ", saving to " + root);
+        Log.i("recorder daemon v" + VERSION + " started, pid " + android.os.Process.myPid() + ", saving to " + root);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             finish();

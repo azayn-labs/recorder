@@ -1,4 +1,4 @@
-package com.callrec.app
+package com.azayn.recorder
 
 import android.Manifest
 import android.content.Context
@@ -604,7 +604,7 @@ private fun whenLabel(ctx: Context, t: Long): String =
     if (DateUtils.isToday(t)) Store.formatTime(t) else "${dayLabel(ctx, t)}, ${Store.formatTime(t)}"
 
 private fun share(ctx: Context, rec: Store.Recording) {
-    val uri = FileProvider.getUriForFile(ctx, "com.callrec.app.files", rec.file)
+    val uri = FileProvider.getUriForFile(ctx, "com.azayn.recorder.files", rec.file)
     val send = Intent(Intent.ACTION_SEND)
         .setType(Store.Format.ofFile(rec.file).mime)
         .putExtra(Intent.EXTRA_STREAM, uri)

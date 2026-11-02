@@ -1,0 +1,13 @@
+Azayn Recorder
+Copyright 2026 Azayn
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes code adapted from scrcpy
+(https://github.com/Genymobile/scrcpy), Copyright (C) 2018 Genymobile and
+Copyright (C) 2018-2026 Romain Vimont, licensed under the Apache License,
+Version 2.0:
+  - daemon/src/com/azayn/recorder/daemon/Env.java (app context setup for an
+    app_process JVM, from FakeContext.java and Workarounds.java)
+  - daemon/src/com/azayn/recorder/daemon/Sources.java (loopback audio policy
+    capture, from AudioPlaybackCapture.java)

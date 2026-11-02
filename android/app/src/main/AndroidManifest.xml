@@ -15,8 +15,9 @@
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 
     <application
-        android:label="Call Recorder"
-        android:icon="@android:drawable/ic_btn_speak_now"
+        android:label="Azayn Recorder"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
@@ -43,7 +44,7 @@
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.callrec.app.files"
+            android:authorities="com.azayn.recorder.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

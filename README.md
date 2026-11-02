@@ -1,4 +1,6 @@
-# call-recorder
+<p align="center"><img src="docs/logo.png" width="160" alt="Azayn Recorder logo"></p>
+
+# Azayn Recorder
 
 Automatic call recorder for a Samsung Galaxy Z Fold 7 (Android 17 / One UI), set up over adb.
 It records:
@@ -50,7 +52,8 @@ You can browse them in *My Files › Internal storage › CallRecorder*.
 
 ## Companion app (`android/`)
 
-The **Call Recorder** app on the phone (`./callrec.sh app` builds, installs and grants its permissions):
+The **Azayn Recorder** app on the phone (package `com.azayn.recorder`; `./callrec.sh app` builds,
+installs and grants its permissions):
 
 - **Recordings tab:** one row per app + contact (e.g. "Jane Doe · WhatsApp · 3 calls") plus
   "Voice recordings". Tap a row for that contact's recordings by day. Filter by app, and search
@@ -109,3 +112,8 @@ Building needs the Android SDK (`$ANDROID_HOME`, platform + build-tools) and a J
   `android-tools`) to run the same `app_process` command.
 - Any app that switches to communication mode gets recorded (Telegram, Meet, Discord, ...).
   Each one lands in a folder named after its package.
+
+## License
+
+Copyright 2026 Azayn. Licensed under the [Apache License, Version 2.0](LICENSE).
+Parts of the daemon are adapted from [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0); see [NOTICE](NOTICE).

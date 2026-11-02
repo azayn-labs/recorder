@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "CallRecorder"
+rootProject.name = "AzaynRecorder"
 include(":app")

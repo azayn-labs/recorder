@@ -1,18 +1,18 @@
-package com.callrec;
+package com.azayn.recorder.daemon;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Tells the companion app (com.callrec.app/.CallNotifier) about the recording state so it can show
+ * Tells the companion app (com.azayn.recorder/.CallNotifier) about the recording state so it can show
  * the ongoing-recording notification. Uses an explicit broadcast from the shell uid; the receiver
  * requires android.permission.DUMP, which shell has and normal apps can't get.
  * Runs `am` off the polling thread since it takes a few hundred ms.
  */
 public final class Notify {
-    private static final String RECEIVER = "com.callrec.app/.CallNotifier";
-    private static final String ACTION = "com.callrec.app.CALL_STATE";
+    private static final String RECEIVER = "com.azayn.recorder/.CallNotifier";
+    private static final String ACTION = "com.azayn.recorder.CALL_STATE";
     // FLAG_RECEIVER_FOREGROUND | FLAG_INCLUDE_STOPPED_PACKAGES
     private static final String FLAGS = String.valueOf(0x10000000 | 0x20);
 

@@ -1,4 +1,4 @@
-package com.callrec.app
+package com.azayn.recorder
 
 import android.Manifest
 import android.content.Context

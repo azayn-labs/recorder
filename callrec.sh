@@ -18,7 +18,7 @@ PLATFORM="$(ls -d "$SDK"/platforms/android-* | sort -V | tail -1)"
 BUILD_TOOLS="$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)"
 ADB="adb${ANDROID_SERIAL:+ -s $ANDROID_SERIAL}"
 JAVAC="$(command -v javac || ls /opt/android-studio/jbr/bin/javac "$HOME"/.local/share/jdk/*/bin/javac "$HOME"/.gradle/jdks/*/bin/javac 2>/dev/null | head -1)"
-APP_ID=com.callrec.app
+APP_ID=com.azayn.recorder
 
 DEX_REMOTE=/data/local/tmp/callrec.dex
 LOG_REMOTE=/data/local/tmp/callrec.log
@@ -37,7 +37,7 @@ build() {
 }
 
 running_pid() {
-    $ADB shell "p=\$(cat $PID_REMOTE 2>/dev/null); [ -n \"\$p\" ] && grep -q com.callrec /proc/\$p/cmdline 2>/dev/null && echo \$p; true" | tr -d '\r'
+    $ADB shell "p=\$(cat $PID_REMOTE 2>/dev/null); [ -n \"\$p\" ] && grep -q com.azayn.recorder.daemon /proc/\$p/cmdline 2>/dev/null && echo \$p; true" | tr -d '\r'
 }
 
 stop() {
@@ -62,7 +62,7 @@ start() {
     $ADB shell "mkdir -p $OUT_REMOTE"
     # Detached from adb (reparented to init), so it keeps running after USB is unplugged.
     # adb itself can hang waiting on the session, so don't wait for it.
-    timeout 5 $ADB shell -T "CLASSPATH=$DEX_REMOTE nohup setsid app_process / com.callrec.Main $OUT_REMOTE >$LOG_REMOTE 2>&1 </dev/null &" || true
+    timeout 5 $ADB shell -T "CLASSPATH=$DEX_REMOTE nohup setsid app_process / com.azayn.recorder.daemon.Main $OUT_REMOTE >$LOG_REMOTE 2>&1 </dev/null &" || true
     sleep 2
     status
 }
@@ -79,7 +79,9 @@ app() {
     (cd android && JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVAC")")")" ./gradlew -q assembleDebug)
     $ADB install -r android/app/build/outputs/apk/debug/app-debug.apk
     $ADB shell appops set "$APP_ID" MANAGE_EXTERNAL_STORAGE allow
-    $ADB shell pm grant "$APP_ID" android.permission.READ_CONTACTS
+    for p in READ_CONTACTS RECORD_AUDIO POST_NOTIFICATIONS; do
+        $ADB shell pm grant "$APP_ID" android.permission.$p
+    done
     $ADB shell am start -n "$APP_ID/.MainActivity" >/dev/null
 }
 
@@ -92,7 +94,7 @@ case "${1:-}" in
     selftest)
         build
         $ADB push build/callrec.dex /data/local/tmp/callrec-test.dex >/dev/null
-        $ADB shell "CLASSPATH=/data/local/tmp/callrec-test.dex app_process / com.callrec.SelfTest ${2:-} ${3:-}" | grep -v '^\s*at '
+        $ADB shell "CLASSPATH=/data/local/tmp/callrec-test.dex app_process / com.azayn.recorder.daemon.SelfTest ${2:-} ${3:-}" | grep -v '^\s*at '
         ;;
     log) $ADB shell "tail -n 50 -f $LOG_REMOTE" ;;
     pull)

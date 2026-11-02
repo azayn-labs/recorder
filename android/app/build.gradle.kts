@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.callrec.app"
+    namespace = "com.azayn.recorder"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.callrec.app"
+        applicationId = "com.azayn.recorder"
         minSdk = 31
         targetSdk = 37
         versionCode = 1

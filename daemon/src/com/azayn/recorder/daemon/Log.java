@@ -1,4 +1,4 @@
-package com.callrec;
+package com.azayn.recorder.daemon;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -6,7 +6,7 @@ import java.util.Locale;
 
 /** Logs to stdout (redirected to a file by the launcher) and logcat. */
 public final class Log {
-    private static final String TAG = "CallRec";
+    private static final String TAG = "AzaynRecorder";
     private static final SimpleDateFormat FMT = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US);
 
     private Log() {

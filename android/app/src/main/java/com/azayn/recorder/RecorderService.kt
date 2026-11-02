@@ -1,4 +1,4 @@
-package com.callrec.app
+package com.azayn.recorder
 
 import android.app.Notification
 import android.app.PendingIntent

@@ -1,4 +1,4 @@
-package com.callrec.app
+package com.azayn.recorder
 
 import android.media.MediaMetadataRetriever
 import android.os.Environment
@@ -11,7 +11,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Files shared with the recorder daemon (see daemon/src/com/callrec/Main.java):
+ * Files shared with the recorder daemon (see daemon/src/com/azayn/recorder/daemon/Main.java):
  *   CallRecorder/<App>/<contact>/<YYYY-MM-DD-HH-MM-SS>.<m4a|opus>   call recordings
  *   CallRecorder/.config.json                               settings, written here
  *   CallRecorder/.status.json                               daemon heartbeat
