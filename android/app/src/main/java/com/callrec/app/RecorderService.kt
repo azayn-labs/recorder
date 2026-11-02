@@ -51,15 +51,22 @@ class RecorderService : Service() {
 
     private fun begin() {
         startForeground(Notifications.ID_VOICE, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        val file = Store.newMemoFile()
+        val format = Store.loadConfig().format
+        val file = Store.newMemoFile(format)
         try {
             recorder = MediaRecorder(this).apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                if (format == Store.Format.OPUS) {
+                    setOutputFormat(MediaRecorder.OutputFormat.OGG)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+                    setAudioEncodingBitRate(48_000)
+                } else {
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setAudioEncodingBitRate(128_000)
+                }
                 setAudioChannels(1)
                 setAudioSamplingRate(48_000)
-                setAudioEncodingBitRate(128_000)
                 setOutputFile(file)
                 prepare()
                 start()

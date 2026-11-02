@@ -31,6 +31,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,6 +79,24 @@ fun SettingsScreen(
                 enabled = config.enabled,
                 leading = { AppBadge(app) },
             ) { onChange(config.copy(apps = config.apps + (app to it))) }
+        }
+
+        item { SectionHeader("Audio format") }
+        items(Store.Format.entries) { f ->
+            ListItem(
+                modifier = Modifier.clickable { onChange(config.copy(format = f)) },
+                leadingContent = { RadioButton(selected = config.format == f, onClick = { onChange(config.copy(format = f)) }) },
+                headlineContent = { Text(f.label + if (f == Store.Format.M4A) " (default)" else "") },
+                supportingContent = { Text(f.detail) },
+            )
+        }
+        item {
+            Text(
+                "Applies to new recordings, calls and voice. Existing recordings keep their format.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
         }
 
         item { SectionHeader("Never record") }

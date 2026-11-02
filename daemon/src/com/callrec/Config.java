@@ -13,7 +13,7 @@ import java.util.Locale;
 /**
  * User settings written by the companion app to &lt;root&gt;/.config.json:
  * <pre>
- * { "enabled": true,
+ * { "enabled": true, "format": "m4a" | "opus",
  *   "apps": { "Phone": true, "WhatsApp": true, "Instagram": false, "Other": true, ... },
  *   "never": [ { "name": "Mom", "numbers": ["+49 151 2345678"] } ] }
  * </pre>
@@ -23,6 +23,7 @@ public final class Config {
     private static final int NUMBER_MATCH_DIGITS = 9;
 
     public boolean enabled = true;
+    public AudioWriter.Format format = AudioWriter.Format.M4A;
     private JSONObject apps = new JSONObject();
     private final List<Entry> never = new ArrayList<>();
 
@@ -40,6 +41,7 @@ public final class Config {
         try {
             JSONObject o = new JSONObject(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
             c.enabled = o.optBoolean("enabled", true);
+            c.format = AudioWriter.Format.of(o.optString("format"));
             JSONObject apps = o.optJSONObject("apps");
             if (apps != null) {
                 c.apps = apps;

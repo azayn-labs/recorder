@@ -21,7 +21,14 @@ The daemon checks the audio mode every 500 ms:
 | `MODE_IN_CALL` | cellular | `VOICE_CALL` source (both sides, straight from the modem). Falls back to uplink + downlink, then the mic. |
 | `MODE_IN_COMMUNICATION` | VoIP | mic (your voice) + a loopback audio policy on `USAGE_VOICE_COMMUNICATION` (their voice; it still plays on the phone) |
 
-The two sides are mixed to mono and encoded as 64 kbps AAC.
+The two sides are mixed to mono and encoded in the format chosen in the app's Settings:
+
+| Format | Calls | Voice recorder | Notes |
+|---|---|---|---|
+| `.m4a` (AAC), default | 64 kbps, ~29 MB/h | 128 kbps | plays everywhere |
+| `.opus` (Ogg Opus) | 24 kbps, ~11 MB/h | 48 kbps | best for speech; some older players can't open it |
+
+The setting applies to new recordings. Existing files keep their format, and the app handles both.
 
 ## Files
 
@@ -36,7 +43,7 @@ The two sides are mixed to mono and encoded as 64 kbps AAC.
   Recordings/Flat viewing notes.m4a                (renamed in the app)
 ```
 
-i.e. `<app>/<contact or number>/YYYY-MM-DD-HH-MM-SS.m4a`. The contact folder comes from the
+i.e. `<app>/<contact or number>/YYYY-MM-DD-HH-MM-SS.m4a` (or `.opus`). The contact folder comes from the
 call log (phone calls) or the app's ongoing-call notification (VoIP), and is `Unknown` if
 neither is available. Recordings under 2 s are dropped.
 You can browse them in *My Files › Internal storage › CallRecorder*.

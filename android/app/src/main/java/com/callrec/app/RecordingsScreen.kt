@@ -492,7 +492,7 @@ private fun RenameDialog(rec: Store.Recording, onDismiss: () -> Unit, onRenamed:
                 onValueChange = { text = it; error = null },
                 singleLine = true,
                 isError = error != null,
-                supportingText = { Text(error ?: "Saved as \"${Store.cleanName(text.text) ?: ""}.m4a\"") },
+                supportingText = { Text(error ?: "Saved as \"${Store.cleanName(text.text) ?: ""}.${rec.file.extension}\"") },
                 modifier = Modifier.focusRequester(focus),
             )
         },
@@ -606,7 +606,7 @@ private fun whenLabel(ctx: Context, t: Long): String =
 private fun share(ctx: Context, rec: Store.Recording) {
     val uri = FileProvider.getUriForFile(ctx, "com.callrec.app.files", rec.file)
     val send = Intent(Intent.ACTION_SEND)
-        .setType("audio/mp4")
+        .setType(Store.Format.ofFile(rec.file).mime)
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     ctx.startActivity(Intent.createChooser(send, "Share recording"))

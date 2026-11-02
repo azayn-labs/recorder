@@ -9,9 +9,30 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/** Encodes mono 16-bit PCM to AAC-LC in an .m4a container. */
-public final class AacWriter {
-    private static final int BITRATE = 64000;
+/** Encodes mono 16-bit PCM to AAC-LC in .m4a, or Opus in .opus (Ogg). */
+public final class AudioWriter {
+    public enum Format {
+        M4A("m4a", MediaFormat.MIMETYPE_AUDIO_AAC, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4, 64000),
+        OPUS("opus", MediaFormat.MIMETYPE_AUDIO_OPUS, MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG, 24000);
+
+        public final String extension;
+        final String mime;
+        final int container;
+        final int bitrate;
+
+        Format(String extension, String mime, int container, int bitrate) {
+            this.extension = extension;
+            this.mime = mime;
+            this.container = container;
+            this.bitrate = bitrate;
+        }
+
+        /** Config value ("m4a" / "opus"); anything else means M4A. */
+        public static Format of(String name) {
+            return "opus".equalsIgnoreCase(name) ? OPUS : M4A;
+        }
+    }
+
     private static final long TIMEOUT_US = 10_000;
 
     private final MediaCodec codec;
@@ -21,15 +42,17 @@ public final class AacWriter {
     private boolean muxerStarted;
     private long samplesIn;
 
-    public AacWriter(String path) throws IOException {
-        MediaFormat fmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, Sources.SAMPLE_RATE, 1);
-        fmt.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
-        fmt.setInteger(MediaFormat.KEY_BIT_RATE, BITRATE);
+    public AudioWriter(String path, Format format) throws IOException {
+        MediaFormat fmt = MediaFormat.createAudioFormat(format.mime, Sources.SAMPLE_RATE, 1);
+        if (format == Format.M4A) {
+            fmt.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+        }
+        fmt.setInteger(MediaFormat.KEY_BIT_RATE, format.bitrate);
         fmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
-        codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
+        codec = MediaCodec.createEncoderByType(format.mime);
         codec.configure(fmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         codec.start();
-        muxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+        muxer = new MediaMuxer(path, format.container);
     }
 
     public long durationMs() {

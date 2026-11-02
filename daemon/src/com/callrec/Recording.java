@@ -23,9 +23,12 @@ public final class Recording implements Runnable {
     private volatile boolean failed;
     private long durationMs;
 
-    public Recording(Kind kind, File file) {
+    private final AudioWriter.Format format;
+
+    public Recording(Kind kind, File file, AudioWriter.Format format) {
         this.kind = kind;
         this.file = file;
+        this.format = format;
         this.thread = new Thread(this, "recording");
     }
 
@@ -47,7 +50,7 @@ public final class Recording implements Runnable {
     public void run() {
         Sources.Capture clock = null;
         Sources.Capture extra = null;
-        AacWriter writer = null;
+        AudioWriter writer = null;
         try {
             if (kind == Kind.CELLULAR) {
                 clock = Sources.voiceCall();
@@ -72,7 +75,7 @@ public final class Recording implements Runnable {
                 return;
             }
 
-            writer = new AacWriter(file.getPath());
+            writer = new AudioWriter(file.getPath(), format);
             loop(clock, extra, writer);
         } catch (Throwable t) {
             Log.e("recording failed", t);
@@ -91,7 +94,7 @@ public final class Recording implements Runnable {
         }
     }
 
-    private void loop(Sources.Capture clock, Sources.Capture extra, AacWriter writer) {
+    private void loop(Sources.Capture clock, Sources.Capture extra, AudioWriter writer) {
         short[] frame = new short[FRAME];
         short[] tmp = new short[FIFO_MAX];
         short[] fifo = new short[FIFO_MAX];

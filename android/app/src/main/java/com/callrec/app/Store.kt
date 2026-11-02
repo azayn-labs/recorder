@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Files shared with the recorder daemon (see daemon/src/com/callrec/Main.java):
- *   CallRecorder/<App>/<yyyy-MM-dd_HH-mm-ss>[_<peer>].m4a   recordings
+ *   CallRecorder/<App>/<contact>/<YYYY-MM-DD-HH-MM-SS>.<m4a|opus>   call recordings
  *   CallRecorder/.config.json                               settings, written here
  *   CallRecorder/.status.json                               daemon heartbeat
  */
@@ -29,7 +29,7 @@ object Store {
     val memoDir get() = File(root, MEMOS)
 
     /**
-     * A call is CallRecorder/<app>/<contact>/<name>.m4a, a voice recording is CallRecorder/Recordings/<name>.m4a.
+     * A call is CallRecorder/<app>/<contact>/<name>.<ext>, a voice recording is CallRecorder/Recordings/<name>.<ext>.
      * <name> is YYYY-MM-DD-HH-MM-SS until the user renames it.
      */
     data class Recording(val file: File, val app: String, val contact: String?, val time: Long) {
@@ -47,9 +47,9 @@ object Store {
     private val STAMP = Regex("""\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}(-\d+)?""")
     private val stampFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.US)
 
-    fun newMemoFile(): File {
+    fun newMemoFile(format: Format): File {
         memoDir.mkdirs()
-        return File(memoDir, stampFormat.format(Date()) + ".m4a")
+        return File(memoDir, stampFormat.format(Date()) + "." + format.extension)
     }
 
     fun recordings(): List<Recording> {
@@ -65,7 +65,8 @@ object Store {
         }.sortedByDescending { it.time }
     }
 
-    private fun audioFiles(dir: File) = dir.listFiles { f -> f.isFile && f.name.endsWith(".m4a") }.orEmpty().toList()
+    private fun audioFiles(dir: File) =
+        dir.listFiles { f -> f.isFile && Format.entries.any { it.extension == f.extension } }.orEmpty().toList()
 
     fun memo(file: File) = recording(file, MEMOS, null)
 
@@ -85,7 +86,7 @@ object Store {
     /** Renames a recording in place. Returns the renamed recording, or null if the name is taken or invalid. */
     fun rename(rec: Recording, newName: String): Recording? {
         val clean = cleanName(newName) ?: return null
-        val dest = File(rec.file.parentFile, "$clean.m4a")
+        val dest = File(rec.file.parentFile, "$clean.${rec.file.extension}")
         if (dest == rec.file) return rec
         if (dest.exists() || !rec.file.renameTo(dest)) return null
         // Once the timestamp is gone from the name, the file's mtime is the recording's date; make it the start time.
@@ -118,8 +119,21 @@ object Store {
 
     data class Blocked(val name: String, val numbers: List<String>)
 
+    /** Recording format. Must match AudioWriter.Format in the daemon (config value = extension). */
+    enum class Format(val extension: String, val mime: String, val label: String, val detail: String) {
+        M4A("m4a", "audio/mp4", "M4A (AAC)", "Plays everywhere · about 29 MB per hour of calls"),
+        OPUS("opus", "audio/ogg", "Opus", "About 11 MB per hour of calls · best for speech, some older players can't open it"),
+        ;
+
+        companion object {
+            fun of(value: String?) = entries.firstOrNull { it.extension == value } ?: M4A
+            fun ofFile(f: File) = entries.firstOrNull { it.extension == f.extension } ?: M4A
+        }
+    }
+
     data class Config(
         val enabled: Boolean = true,
+        val format: Format = Format.M4A,
         val apps: Map<String, Boolean> = emptyMap(),
         val never: List<Blocked> = emptyList(),
     ) {
@@ -134,6 +148,7 @@ object Store {
         val never = o.optJSONArray("never") ?: JSONArray()
         return Config(
             enabled = o.optBoolean("enabled", true),
+            format = Format.of(o.optString("format")),
             apps = apps?.keys()?.asSequence()?.associateWith { apps.getBoolean(it) } ?: emptyMap(),
             never = (0 until never.length()).map { i ->
                 val e = never.getJSONObject(i)
@@ -146,6 +161,7 @@ object Store {
     fun saveConfig(c: Config) {
         val o = JSONObject()
             .put("enabled", c.enabled)
+            .put("format", c.format.extension)
             .put("apps", JSONObject(c.apps))
             .put("never", JSONArray(c.never.map { b ->
                 JSONObject().put("name", b.name).put("numbers", JSONArray(b.numbers))

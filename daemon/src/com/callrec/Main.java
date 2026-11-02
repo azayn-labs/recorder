@@ -16,11 +16,11 @@ import java.util.Locale;
  * Call recorder daemon. Launched via adb as uid shell:
  *   CLASSPATH=/data/local/tmp/callrec.dex app_process / com.callrec.Main [outputDir]
  * Polls the audio mode and records every cellular (MODE_IN_CALL) and VoIP
- * (MODE_IN_COMMUNICATION) call to outputDir/&lt;App&gt;/&lt;date&gt;_&lt;peer&gt;.m4a,
+ * (MODE_IN_COMMUNICATION) call to outputDir/&lt;App&gt;/&lt;contact&gt;/&lt;date&gt;.&lt;m4a|opus&gt;,
  * honoring the companion app's .config.json and reporting to .status.json.
  */
 public final class Main {
-    public static final int VERSION = 4;
+    public static final int VERSION = 5;
 
     private static final long POLL_MS = 500;
     private static final int START_POLLS = 2; // call mode must hold for 1 s before recording
@@ -142,7 +142,7 @@ public final class Main {
         tmpDir.mkdirs();
         new File(root, ".control").delete(); // ignore commands meant for an earlier call
         stoppedEarly = false;
-        current = new Recording(kind, new File(tmpDir, System.currentTimeMillis() + ".m4a"));
+        current = new Recording(kind, new File(tmpDir, System.currentTimeMillis() + "." + config.format.extension), config.format);
         current.start();
         notifyRecording();
         writeStatus();
@@ -265,14 +265,15 @@ public final class Main {
             peer = currentPeer;
         }
 
-        // <root>/<App>/<contact or number>/YYYY-MM-DD-HH-MM-SS.m4a
+        // <root>/<App>/<contact or number>/YYYY-MM-DD-HH-MM-SS.<m4a|opus>
         String stamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.US).format(new Date(rec.startedAt));
         String contact = peer != null ? sanitize(peer) : "";
         File dir = new File(new File(root, app), contact.isEmpty() ? "Unknown" : contact);
         dir.mkdirs();
-        File dest = new File(dir, stamp + ".m4a");
+        String ext = rec.file.getName().substring(rec.file.getName().lastIndexOf('.'));
+        File dest = new File(dir, stamp + ext);
         for (int i = 2; dest.exists(); i++) {
-            dest = new File(dir, stamp + "-" + i + ".m4a");
+            dest = new File(dir, stamp + "-" + i + ext);
         }
         if (rec.file.renameTo(dest)) {
             Log.i("saved " + dest);
