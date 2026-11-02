@@ -43,9 +43,10 @@ and backed up somewhere safe (e.g. a password manager).
    ```bash
    gh secret set RECORDER_KEYSTORE_BASE64 --env release < <(base64 -w0 ~/azayn-recorder-release.jks)
    gh secret set RECORDER_KEYSTORE_PASSWORD --env release
-   gh secret set RECORDER_KEY_ALIAS --env release --body recorder
    gh secret set RECORDER_KEY_PASSWORD --env release
    ```
+
+   The key alias (`recorder`) is set in the workflow itself; it isn't secret.
 
    The environment also restricts which tags may deploy (Settings →
    Environments → release → Deployment branches and tags → `v*`).

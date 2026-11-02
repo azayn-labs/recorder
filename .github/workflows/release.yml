@@ -43,7 +43,8 @@ jobs:
         env:
           RECORDER_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
           RECORDER_KEYSTORE_PASSWORD: ${{ secrets.RECORDER_KEYSTORE_PASSWORD }}
-          RECORDER_KEY_ALIAS: ${{ secrets.RECORDER_KEY_ALIAS }}
+          # Not secret; as a secret its value ("recorder") was masked everywhere in the logs.
+          RECORDER_KEY_ALIAS: recorder
           RECORDER_KEY_PASSWORD: ${{ secrets.RECORDER_KEY_PASSWORD }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
