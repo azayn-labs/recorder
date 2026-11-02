@@ -1,5 +1,23 @@
 package com.azayn.recorder
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.StopCircle
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material3.Switch
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -48,6 +66,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+
 @Composable
 fun SettingsScreen(
     status: Store.Status,
@@ -61,96 +80,7 @@ fun SettingsScreen(
     val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) showPicker = true
     }
-
-    LazyColumn(modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
-        item { StatusCard(status) }
-
-        item { SectionHeader("Recording") }
-        item {
-            SwitchRow("Record calls", if (config.enabled) "On" else "Paused: no calls are recorded", config.enabled) {
-                onChange(config.copy(enabled = it))
-            }
-        }
-        items(Store.APPS) { app ->
-            SwitchRow(
-                if (app == "Other") "Other calling apps" else app,
-                null,
-                config.enabled && config.appEnabled(app),
-                enabled = config.enabled,
-                leading = { AppBadge(app) },
-            ) { onChange(config.copy(apps = config.apps + (app to it))) }
-        }
-
-        item { SectionHeader("Audio format") }
-        items(Store.Format.entries) { f ->
-            ListItem(
-                modifier = Modifier.clickable { onChange(config.copy(format = f)) },
-                leadingContent = { RadioButton(selected = config.format == f, onClick = { onChange(config.copy(format = f)) }) },
-                headlineContent = { Text(f.label + if (f == Store.Format.M4A) " (default)" else "") },
-                supportingContent = { Text(f.detail) },
-            )
-        }
-        item {
-            Text(
-                "Applies to new recordings, calls and voice. Existing recordings keep their format.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-
-        item { SectionHeader("Never record") }
-        item {
-            Text(
-                "Calls with these people are not recorded. Phone numbers match regular calls. Names match how " +
-                    "WhatsApp, Instagram or Facebook shows the person in its call screen. For outgoing phone calls " +
-                    "the number is only known after hang-up, so those are recorded and then deleted right away.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-        items(config.never, key = { it.name + it.numbers }) { b ->
-            ListItem(
-                headlineContent = { Text(b.name.ifBlank { b.numbers.firstOrNull() ?: "?" }) },
-                supportingContent = if (b.numbers.isNotEmpty() && b.name.isNotBlank()) {
-                    { Text(b.numbers.joinToString(", ")) }
-                } else null,
-                trailingContent = {
-                    IconButton(onClick = { onChange(config.copy(never = config.never - b)) }) {
-                        Icon(Icons.Default.Close, "Remove")
-                    }
-                },
-            )
-        }
-        item {
-            Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = {
-                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) ==
-                        PackageManager.PERMISSION_GRANTED
-                    ) showPicker = true else contactsPermission.launch(Manifest.permission.READ_CONTACTS)
-                }) {
-                    Icon(Icons.Default.Contacts, null)
-                    Text("  From contacts")
-                }
-                OutlinedButton(onClick = { showManual = true }) {
-                    Icon(Icons.Default.Edit, null)
-                    Text("  Name / number")
-                }
-            }
-        }
-        item { SectionHeader("Storage") }
-        item {
-            Text(
-                "Recordings: ${Store.root.path}",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-    }
+    val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "" }
 
     fun add(b: Store.Blocked) {
         if (config.never.none { it.name.equals(b.name, true) && it.numbers == b.numbers }) {
@@ -158,73 +88,169 @@ fun SettingsScreen(
         }
     }
 
+    LazyColumn(
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+    ) {
+        item { ScreenTitle("Settings", inset = 4.dp) }
+        item { StatusCard(status) }
+
+        item { SectionLabel("Recording") }
+        item {
+            Panel {
+                PanelRow(
+                    "Record calls",
+                    hint = if (config.enabled) "Calls are recorded automatically" else "Paused: no calls are recorded",
+                    icon = Icons.Default.Mic,
+                    onClick = { onChange(config.copy(enabled = !config.enabled)) },
+                ) { Switch(config.enabled, { onChange(config.copy(enabled = it)) }) }
+                Store.APPS.forEach { app ->
+                    PanelDivider()
+                    val on = config.enabled && config.appEnabled(app)
+                    PanelRow(
+                        if (app == "Other") "Other calling apps" else app,
+                        leading = { AppBadge(app, size = 26) },
+                        enabled = config.enabled,
+                        onClick = { onChange(config.copy(apps = config.apps + (app to !config.appEnabled(app)))) },
+                    ) {
+                        Switch(on, { onChange(config.copy(apps = config.apps + (app to it))) }, enabled = config.enabled)
+                    }
+                }
+            }
+        }
+
+        item { SectionLabel("Audio format") }
+        item {
+            Panel {
+                Store.Format.entries.forEachIndexed { i, f ->
+                    if (i > 0) PanelDivider()
+                    PanelRow(
+                        f.label + if (f == Store.Format.M4A) " (default)" else "",
+                        hint = f.detail,
+                        icon = Icons.Default.AudioFile,
+                        onClick = { onChange(config.copy(format = f)) },
+                    ) { RadioButton(selected = config.format == f, onClick = { onChange(config.copy(format = f)) }) }
+                }
+            }
+        }
+        item { Caption("Applies to new recordings, calls and voice. Existing recordings keep their format.") }
+
+        item { SectionLabel("Never record") }
+        item {
+            Panel {
+                config.never.forEach { b ->
+                    PanelRow(
+                        b.name.ifBlank { b.numbers.firstOrNull() ?: "?" },
+                        hint = if (b.numbers.isNotEmpty() && b.name.isNotBlank()) b.numbers.joinToString(", ") else null,
+                        icon = Icons.Default.Block,
+                    ) {
+                        IconButton(onClick = { onChange(config.copy(never = config.never - b)) }) {
+                            Icon(Icons.Default.Close, "Remove", tint = az.textTertiary)
+                        }
+                    }
+                    PanelDivider()
+                }
+                PanelRow(
+                    "Add from contacts", hint = "All of a contact's numbers", icon = Icons.Default.Contacts,
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) showPicker = true else contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+                    },
+                ) { Chevron() }
+                PanelDivider()
+                PanelRow(
+                    "Add a name or number", hint = "e.g. an Instagram username", icon = Icons.Default.Edit,
+                    onClick = { showManual = true },
+                ) { Chevron() }
+            }
+        }
+        item {
+            Caption(
+                "Phone numbers match regular calls. Names match how WhatsApp, Instagram or Facebook shows the " +
+                    "person on its call screen. Outgoing phone calls only reveal the number after hang-up, so those " +
+                    "are recorded and then deleted right away.",
+            )
+        }
+
+        item { SectionLabel("Appearance") }
+        item {
+            Panel {
+                PanelRow("Theme", hint = "System follows your phone's light or dark setting", icon = Icons.Outlined.Palette)
+                SegmentedTabs(
+                    ThemePref.entries, UiPrefs.theme, { it.label }, { UiPrefs.setTheme(ctx, it) },
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                )
+            }
+        }
+
+        item { SectionLabel("About") }
+        item {
+            Panel {
+                PanelRow("Version", hint = "Free version from GitHub", icon = Icons.Outlined.Info) {
+                    Text(version, style = MaterialTheme.typography.bodyMedium, color = az.primary)
+                }
+                PanelDivider()
+                PanelRow("Recordings folder", hint = Store.root.path, icon = Icons.Outlined.Folder)
+                PanelDivider()
+                PanelRow(
+                    "Source code", hint = "github.com/azayn-labs/recorder", icon = Icons.Default.Code,
+                    onClick = { openLink(ctx, Links.REPO) },
+                ) { Chevron() }
+                PanelDivider()
+                PanelRow(
+                    "License", hint = "Apache 2.0 · provided as is, without warranty", icon = Icons.Outlined.Gavel,
+                    onClick = { openLink(ctx, Links.LICENSE) },
+                ) { Chevron() }
+                PanelDivider()
+                PanelRow(
+                    "Support Azayn Recorder", hint = "ko-fi.com/azayn", icon = Icons.Outlined.FavoriteBorder,
+                    onClick = { openLink(ctx, Links.KOFI) },
+                ) { Chevron() }
+            }
+        }
+        item { Caption("You are responsible for following the call-recording laws where you and the other person are.") }
+    }
+
     if (showPicker) ContactPicker(onDismiss = { showPicker = false }, onPick = { showPicker = false; add(it) })
     if (showManual) ManualEntry(onDismiss = { showManual = false }, onAdd = { showManual = false; add(it) })
 }
 
 @Composable
-private fun StatusCard(status: Store.Status) {
-    val (title, detail, color) = when {
-        !status.running -> Triple(
-            "Recorder not running",
-            "It stops when the phone restarts. Connect USB and run ./callrec.sh start on your computer.",
-            MaterialTheme.colorScheme.errorContainer,
-        )
-        status.state == "recording" -> Triple(
-            "Recording now",
-            listOfNotNull(status.app, status.peer).joinToString(" · ") +
-                if (status.since > 0) " · since ${Store.formatTime(status.since)}" else "",
-            MaterialTheme.colorScheme.tertiaryContainer,
-        )
-        status.state == "stopped" -> Triple(
-            "Recording stopped",
-            "Stopped from the notification. It's saved when the call ends.",
-            MaterialTheme.colorScheme.secondaryContainer,
-        )
-        status.state == "skipping" -> Triple(
-            "Not recording this call",
-            status.reason ?: "",
-            MaterialTheme.colorScheme.secondaryContainer,
-        )
-        else -> Triple("Recorder running", "Waiting for calls", MaterialTheme.colorScheme.primaryContainer)
-    }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = color),
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(text: String) {
+private fun Caption(text: String) {
     Text(
         text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = az.textTertiary,
+        modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp),
     )
 }
 
 @Composable
-private fun SwitchRow(
-    title: String,
-    subtitle: String?,
-    checked: Boolean,
-    enabled: Boolean = true,
-    leading: (@Composable () -> Unit)? = null,
-    onToggle: (Boolean) -> Unit,
-) {
-    ListItem(
-        modifier = Modifier.clickable(enabled = enabled) { onToggle(!checked) },
-        leadingContent = leading,
-        headlineContent = { Text(title) },
-        supportingContent = subtitle?.let { { Text(it) } },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onToggle, enabled = enabled) },
-    )
+private fun StatusCard(status: Store.Status) {
+    data class S(val icon: ImageVector, val tint: Color, val fill: Color, val title: String, val detail: String)
+    val s = when {
+        !status.running -> S(
+            Icons.Default.ErrorOutline, az.error, az.errorBg, "Recorder not running",
+            "It stops when the phone restarts. Connect USB and run ./callrec.sh start on your computer.",
+        )
+        status.state == "recording" -> S(
+            Icons.Default.FiberManualRecord, az.error, az.errorBg, "Recording now",
+            listOfNotNull(status.app, status.peer).joinToString(" · ") +
+                if (status.since > 0) " · since ${Store.formatTime(status.since)}" else "",
+        )
+        status.state == "stopped" -> S(
+            Icons.Default.StopCircle, az.primary, az.primaryTint, "Recording stopped",
+            "Stopped from the notification. It's saved when the call ends.",
+        )
+        status.state == "skipping" -> S(
+            Icons.Default.Block, az.primary, az.primaryTint, "Not recording this call", status.reason ?: "",
+        )
+        else -> S(Icons.Default.CheckCircle, az.primary, az.primaryTint, "Recorder running", "Waiting for calls")
+    }
+    Panel {
+        PanelRow(s.title, hint = s.detail, leading = { IconWell(s.icon, tint = s.tint, fill = s.fill) })
+    }
 }
 
 private fun loadContacts(ctx: Context): List<Store.Blocked> {

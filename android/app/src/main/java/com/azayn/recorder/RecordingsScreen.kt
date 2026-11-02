@@ -1,5 +1,15 @@
 package com.azayn.recorder
 
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -102,7 +112,7 @@ private val APP_COLORS = mapOf(
     "Instagram" to Color(0xFFC13584),
     "Facebook" to Color(0xFF1877F2),
     "Messenger" to Color(0xFF0084FF),
-    Store.MEMOS to Color(0xFFE65100),
+    Store.MEMOS to Color(0xFF4F46E5),
 )
 
 private fun appName(app: String) = if (app == Store.MEMOS) "Voice" else app
@@ -148,16 +158,13 @@ fun RecordingsScreen(
     Scaffold(
         modifier = modifier,
         contentWindowInsets = WindowInsets(0),
+        containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             if (active == null) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
-                    },
-                    icon = { Icon(Icons.Default.Mic, null) },
-                    text = { Text("Record") },
-                )
+                GradientButton("Record", Icons.Default.Mic, onClick = {
+                    micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+                })
             }
         },
         bottomBar = { active?.let { RecordingBar(it) { RecorderService.stop(ctx) } } },
@@ -244,69 +251,101 @@ private fun GroupList(
     val namedMatches = if (q.isEmpty()) emptyList() else inApp.filter { it.customName?.contains(q, ignoreCase = true) == true }
 
     Column(modifier.fillMaxSize()) {
+        ScreenTitle("Recordings")
         StatusBanner(status)
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Search contacts or recording names") },
-            leadingIcon = { Icon(Icons.Default.Search, null) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        SearchField(query, { query = it })
         if (apps.size > 1) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
+                modifier = Modifier.padding(bottom = 4.dp),
             ) {
-                item { FilterChip(appFilter == null, { appFilter = null }, { Text("All") }) }
-                items(apps) { app ->
-                    FilterChip(appFilter == app, { appFilter = if (appFilter == app) null else app }, { Text(appName(app)) })
-                }
+                item { PillChip("All", appFilter == null) { appFilter = null } }
+                items(apps) { app -> PillChip(appName(app), appFilter == app) { appFilter = if (appFilter == app) null else app } }
             }
         }
 
         if (groups.isEmpty() && namedMatches.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    if (recordings.isEmpty()) "No recordings yet" else "Nothing matches",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EmptyState(if (recordings.isEmpty()) "No recordings yet" else "Nothing matches",
+                if (recordings.isEmpty()) "Calls are saved here automatically. Tap Record for a voice note." else null)
             return@Column
         }
 
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+        ) {
             if (namedMatches.isNotEmpty()) {
                 item { SectionLabel("Named recordings") }
-                items(namedMatches, key = { "n-" + it.file.path }) { rec ->
-                    ListItem(
-                        modifier = Modifier.clickable { onPlay(rec) },
-                        leadingContent = { AppBadge(rec.app) },
-                        headlineContent = { Text(rec.customName!!, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text("${rec.group.title} · ${whenLabel(ctx, rec.time)}") },
-                    )
+                item {
+                    Panel {
+                        namedMatches.forEachIndexed { i, rec ->
+                            if (i > 0) PanelDivider()
+                            PanelRow(
+                                rec.customName!!,
+                                hint = "${rec.group.title} · ${whenLabel(ctx, rec.time)}",
+                                leading = { AppBadge(rec.app) },
+                                onClick = { onPlay(rec) },
+                            )
+                        }
+                    }
                 }
-                if (groups.isNotEmpty()) item { SectionLabel("Contacts") }
             }
-            items(groups, key = { "g-" + it.group }) { s ->
-                ListItem(
-                    modifier = Modifier.clickable { onOpen(s.group) },
-                    leadingContent = { AppBadge(s.group.app) },
-                    headlineContent = { Text(s.group.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = {
-                        val noun = if (s.group.app == Store.MEMOS) "recording" else "call"
-                        Text("${appName(s.group.app)} · ${s.count} $noun${if (s.count == 1) "" else "s"} · ${whenLabel(ctx, s.latest)}")
-                    },
-                    trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
-                )
+            if (groups.isNotEmpty()) {
+                item { SectionLabel(if (namedMatches.isNotEmpty()) "Contacts" else "Contacts and apps") }
+                item {
+                    Panel {
+                        groups.forEachIndexed { i, s ->
+                            if (i > 0) PanelDivider()
+                            val noun = if (s.group.app == Store.MEMOS) "recording" else "call"
+                            PanelRow(
+                                s.group.title,
+                                hint = "${appName(s.group.app)} · ${s.count} $noun${if (s.count == 1) "" else "s"} · ${whenLabel(ctx, s.latest)}",
+                                leading = { AppBadge(s.group.app) },
+                                onClick = { onOpen(s.group) },
+                            ) { Chevron() }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+@Composable
+private fun SearchField(value: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        placeholder = { Text("Search contacts or recording names", color = az.textTertiary) },
+        leadingIcon = { Icon(Icons.Default.Search, null, tint = az.textTertiary) },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = az.surface,
+            unfocusedContainerColor = az.surface,
+            unfocusedBorderColor = az.border,
+            focusedBorderColor = az.primary,
+        ),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun EmptyState(title: String, detail: String?) {
+    Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IconWell(Icons.Default.GraphicEq, size = 56)
+        Text(title, style = MaterialTheme.typography.titleMedium, color = az.textPrimary)
+        if (detail != null) Text(detail, style = MaterialTheme.typography.bodyMedium, color = az.textSecondary, textAlign = TextAlign.Center)
+    }
+}
+
 // ---- one contact's recordings ----
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GroupDetail(
     group: Store.Group,
@@ -321,41 +360,41 @@ private fun GroupDetail(
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
-        TopAppBar(
-            windowInsets = WindowInsets(0),
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-            title = {
-                Column {
-                    Text(group.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(appName(group.app), style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            actions = {
-                if (group.contact != null) {
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "More") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Never record ${group.title}") },
-                                leadingIcon = { Icon(Icons.Default.Block, null) },
-                                onClick = { menu = false; onNeverRecord() },
-                            )
-                        }
+        ScreenTitle(
+            group.title,
+            subtitle = appName(group.app),
+            navigation = { HeaderButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack) },
+        ) {
+            if (group.contact != null) {
+                Box {
+                    HeaderButton(Icons.Default.MoreVert, "More") { menu = true }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Never record ${group.title}") },
+                            leadingIcon = { Icon(Icons.Default.Block, null) },
+                            onClick = { menu = false; onNeverRecord() },
+                        )
                     }
                 }
-            },
-        )
-        if (recs.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No recordings left", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        if (recs.isEmpty()) {
+            EmptyState("No recordings left", null)
             return@Column
         }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+        ) {
             recs.groupBy { dayLabel(ctx, it.time) }.forEach { (day, dayRecs) ->
                 item(key = "h-$day") { SectionLabel(day) }
-                items(dayRecs, key = { it.file.path }) { rec ->
-                    RecordingRow(rec, onClick = { onPlay(rec) }, onRename = { onRename(rec) }, onDelete = { onDelete(rec) })
+                item(key = "p-$day") {
+                    Panel {
+                        dayRecs.forEachIndexed { i, rec ->
+                            if (i > 0) PanelDivider()
+                            RecordingRow(rec, onClick = { onPlay(rec) }, onRename = { onRename(rec) }, onDelete = { onDelete(rec) })
+                        }
+                    }
                 }
             }
         }
@@ -369,67 +408,51 @@ private fun RecordingRow(rec: Store.Recording, onClick: () -> Unit, onRename: ()
     var menu by remember { mutableStateOf(false) }
     val time = Store.formatTime(rec.time)
     val length = if (duration > 0) Store.formatDuration(duration) else ""
-    ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
-        leadingContent = {
-            Box(
-                Modifier.size(40.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.onSecondaryContainer) }
-        },
-        headlineContent = { Text(rec.customName ?: time, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = { Text(listOfNotNull(if (rec.customName != null) time else null, length.ifEmpty { null }).joinToString(" · ")) },
-        trailingContent = {
-            Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "More") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Rename") }, leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, null) },
-                        onClick = { menu = false; onRename() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null) },
-                        onClick = { menu = false; share(ctx, rec) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete") }, leadingIcon = { Icon(Icons.Default.Delete, null) },
-                        onClick = { menu = false; onDelete() },
-                    )
-                }
+    PanelRow(
+        rec.customName ?: time,
+        hint = listOfNotNull(if (rec.customName != null) time else null, length.ifEmpty { null }).joinToString(" · "),
+        leading = { IconWell(Icons.Default.PlayArrow) },
+        onClick = onClick,
+    ) {
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "More", tint = az.textTertiary) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Rename") }, leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, null) },
+                    onClick = { menu = false; onRename() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null) },
+                    onClick = { menu = false; share(ctx, rec) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete") }, leadingIcon = { Icon(Icons.Default.Delete, null) },
+                    onClick = { menu = false; onDelete() },
+                )
             }
-        },
-    )
+        }
+    }
 }
 
 // ---- shared pieces ----
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
 private fun StatusBanner(status: Store.Status) {
-    val (text, color) = when {
-        !status.running -> "Call recorder not running. Connect USB and run ./callrec.sh start" to
-            MaterialTheme.colorScheme.errorContainer
-        status.state == "recording" -> "● Recording ${status.app ?: "call"}${status.peer?.let { " · $it" } ?: ""}" to
-            MaterialTheme.colorScheme.tertiaryContainer
+    val (text, recording) = when {
+        !status.running -> "Call recorder not running. Connect USB and run ./callrec.sh start" to false
+        status.state == "recording" -> "Recording ${status.app ?: "call"}${status.peer?.let { " · $it" } ?: ""}" to true
         else -> return
     }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = color),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
+    Panel(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fill = az.errorBg) {
+        PanelRow(
+            text,
+            leading = { IconWell(if (recording) Icons.Default.FiberManualRecord else Icons.Default.ErrorOutline, tint = az.error, fill = az.surface, size = 32) },
+            titleColor = az.error,
+        )
     }
 }
 
+/** In-progress voice recording: the gradient strip (white text) with the timer and a stop button. */
 @Composable
 private fun RecordingBar(active: RecorderService.Active, onStop: () -> Unit) {
     var elapsed by remember { mutableLongStateOf(0L) }
@@ -439,29 +462,38 @@ private fun RecordingBar(active: RecorderService.Active, onStop: () -> Unit) {
             delay(250)
         }
     }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(16.dp).shadow(8.dp, shape).clip(shape).background(AzaynStripGradient)
+            .padding(start = 20.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(12.dp).background(Color.Red, CircleShape))
-            Spacer(Modifier.size(12.dp))
-            Text("Recording  ${Store.formatDuration(elapsed)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            FilledIconButton(onClick = onStop, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.Stop, "Stop", Modifier.size(32.dp)) }
+        Box(Modifier.size(10.dp).background(Color.White, CircleShape))
+        Spacer(Modifier.size(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Recording", style = MaterialTheme.typography.titleSmall, color = Color.White)
+            Text(Store.formatDuration(elapsed), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
         }
+        Box(
+            Modifier.size(48.dp).clip(CircleShape).background(Color.White).clickable(onClick = onStop),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Default.Stop, "Stop", tint = Color(0xFF4F46E5), modifier = Modifier.size(26.dp)) }
     }
 }
 
 @Composable
-fun AppBadge(app: String) {
+fun AppBadge(app: String, size: Int = 40) {
     Box(
-        Modifier.size(40.dp).background(APP_COLORS[app] ?: Color.Gray, CircleShape),
+        Modifier.size(size.dp).background(APP_COLORS[app] ?: Color(0xFF6B7085), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         if (app == Store.MEMOS) {
-            Icon(Icons.Default.Mic, null, tint = Color.White)
+            Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size((size * 0.55).dp))
         } else {
-            Text(app.take(1), color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(
+                app.take(1), color = Color.White,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = (size * 0.42).sp),
+            )
         }
     }
 }
@@ -574,11 +606,12 @@ private fun PlayerSheet(rec: Store.Recording, onDismiss: () -> Unit, onRename: (
                 IconButton(onClick = { player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)) }) {
                     Icon(Icons.Default.Replay10, "Back 10 seconds")
                 }
-                FilledIconButton(
-                    onClick = { if (player.isPlaying) player.pause() else player.start(); isPlaying = player.isPlaying },
-                    modifier = Modifier.size(64.dp),
+                Box(
+                    Modifier.size(64.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(AzaynGradient)
+                        .clickable { if (player.isPlaying) player.pause() else player.start(); isPlaying = player.isPlaying },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play/pause", Modifier.size(36.dp))
+                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play/pause", tint = Color.White, modifier = Modifier.size(34.dp))
                 }
                 IconButton(onClick = { player.seekTo((player.currentPosition + 10_000).coerceAtMost(duration)) }) {
                     Icon(Icons.Default.Forward10, "Forward 10 seconds")

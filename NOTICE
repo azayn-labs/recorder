@@ -11,3 +11,8 @@ Version 2.0:
     app_process JVM, from FakeContext.java and Workarounds.java)
   - daemon/src/com/azayn/recorder/daemon/Sources.java (loopback audio policy
     capture, from AudioPlaybackCapture.java)
+
+This product bundles the Inter typeface (android/app/src/main/res/font/inter.ttf),
+Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter),
+licensed under the SIL Open Font License, Version 1.1
+(see docs/licenses/Inter-OFL.txt).
