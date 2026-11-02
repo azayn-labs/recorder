@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.png" width="160" alt="Azayn Recorder logo"></p>
+<p align="center"><img src="docs/screenshots/hero.png" alt="Azayn Recorder: every call on your phone, recorded automatically"></p>
 
 # Azayn Recorder
 
@@ -11,6 +11,24 @@ It records:
 > **Before you use it:** recording calls is restricted or illegal in many places unless everyone on
 > the call agrees. You are solely responsible for using this software lawfully. Read the
 > [legal notice and disclaimer](#legal-notice-and-disclaimer).
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/01-recordings.png" width="24%" alt="Every call, sorted by app and contact">
+  <img src="docs/screenshots/02-contact.png" width="24%" alt="Rename what matters">
+  <img src="docs/screenshots/03-player.png" width="24%" alt="Built-in player">
+  <img src="docs/screenshots/04-voice-recorder.png" width="24%" alt="One-tap voice recorder">
+</p>
+<p align="center">
+  <img src="docs/screenshots/05-notification.png" width="24%" alt="Live notification while recording">
+  <img src="docs/screenshots/06-settings.png" width="24%" alt="Your rules: per-app switches and audio format">
+  <img src="docs/screenshots/07-never-record.png" width="24%" alt="Never record some people">
+  <img src="docs/screenshots/08-light-dark.png" width="24%" alt="Light and dark themes">
+</p>
+
+<sub>Screenshots use fictional names and numbers. They're rebuilt from on-device captures with
+`docs/screenshots/make.py`.</sub>
 
 ## How it works
 
