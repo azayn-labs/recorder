@@ -64,7 +64,8 @@ installs and grants its permissions):
   contacts or recording names. Built-in player (seek, ±10 s), rename, share, delete, and
   "Never record" for a contact. A banner shows when the call recorder is not running or is
   recording right now.
-- **Record button:** a microphone recorder (foreground service, so it keeps going with the
+- **Record button:** the round gradient button in the middle of the bottom bar (Health's notched
+  bar). It turns into Stop with a running timer while recording. It's a microphone recorder (foreground service, so it keeps going with the
   screen off; stop from the app or the notification). Saves to `Recordings/`, then offers to rename.
 - **Live notification:** while a call is being recorded, an ongoing notification shows the
   app, the contact and a running timer, with **Stop** (keep what's recorded so far and skip the

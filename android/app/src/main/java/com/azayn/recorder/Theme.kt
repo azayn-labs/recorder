@@ -3,6 +3,7 @@ package com.azayn.recorder
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +46,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
@@ -368,28 +372,109 @@ fun PillChip(text: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Floating rounded bottom bar (Health's tab bar, without the hopping ball). */
+// Health's bottom bar geometry (healthu mobile src/shared/ui/bottom-tab-bar.tsx), in dp: a rounded
+// bar whose top edge dips into a bowl around a gradient ball. Here the ball doesn't hop between tabs;
+// it stays in the middle as the Record button.
+private const val BAR_HEIGHT = 64f
+private const val BAR_CORNER = 20f
+// Larger than Health's 25dp: here the ball is the Record button and should stand out.
+private const val BALL_R = 31f
+private const val BALL_RISE = 2f
+private const val NOTCH_GAP = 6f
+private const val SHOULDER = 10f
+private const val NOTCH_DEPTH = BALL_R + NOTCH_GAP - BALL_RISE
+private const val CLEARANCE = 10f
+
+/** The bar outline: a rounded rectangle whose top edge dips into a bowl centred on [x] (all in px). */
+private fun notchPath(w: Float, h: Float, x: Float, dp: Float): Path {
+    val corner = BAR_CORNER * dp
+    val shoulder = SHOULDER * dp
+    val half = (BALL_R + NOTCH_GAP + SHOULDER) * dp
+    val a = maxOf(corner, x - half)
+    val b = minOf(w - corner, x + half)
+    val bowl = (BALL_R + NOTCH_GAP) * dp * 0.95f
+    val depth = NOTCH_DEPTH * dp
+    return Path().apply {
+        moveTo(corner, 0f)
+        lineTo(a, 0f)
+        cubicTo(a + shoulder * 0.9f, 0f, x - bowl, depth, x, depth)
+        cubicTo(x + bowl, depth, b - shoulder * 0.9f, 0f, b, 0f)
+        lineTo(w - corner, 0f)
+        quadraticTo(w, 0f, w, corner)
+        lineTo(w, h - corner)
+        quadraticTo(w, h, w - corner, h)
+        lineTo(corner, h)
+        quadraticTo(0f, h, 0f, h - corner)
+        lineTo(0f, corner)
+        quadraticTo(0f, 0f, corner, 0f)
+        close()
+    }
+}
+
+/**
+ * Health's notched bottom bar with two tabs and the gradient ball in the middle as a button.
+ * Tabs show outline icons; only the active one is labelled. [centerLabel] sits under the ball.
+ */
 @Composable
-fun FloatingTabBar(tabs: List<Pair<ImageVector, String>>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            .shadow(8.dp, shape).clip(shape).background(az.surface).border(1.dp, az.border, shape).height(64.dp),
-        verticalAlignment = Alignment.CenterVertically,
+fun NotchedNavBar(
+    tabs: List<Pair<ImageVector, String>>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    centerIcon: ImageVector,
+    centerLabel: String,
+    centerLabelColor: Color,
+    centerDescription: String,
+    onCenter: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val fill = az.surface
+    val stroke = az.border
+    Box(
+        modifier.fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = (CLEARANCE + BALL_R + BALL_RISE).dp, bottom = 8.dp)
+            .height(BAR_HEIGHT.dp),
     ) {
-        tabs.forEachIndexed { i, (icon, label) ->
-            val active = i == selected
-            Column(
-                Modifier.weight(1f).clickable { onSelect(i) }.padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
+        Canvas(Modifier.matchParentSize()) {
+            val path = notchPath(size.width, size.height, size.width / 2, density)
+            drawPath(path, fill)
+            drawPath(path, stroke, style = Stroke(width = 1.dp.toPx()))
+        }
+        Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
+            tabs.forEachIndexed { i, (icon, label) ->
+                if (i == 1) {
+                    // The space under the ball, holding its label at the bar's label line.
+                    Box(Modifier.width(((BALL_R + NOTCH_GAP + SHOULDER) * 2).dp).height(BAR_HEIGHT.dp)) {
+                        Text(
+                            centerLabel, style = MaterialTheme.typography.labelSmall, color = centerLabelColor,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                        )
+                    }
+                }
+                val active = i == selected
                 Box(
-                    Modifier.clip(CircleShape).background(if (active) az.primaryTint else Color.Transparent)
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                ) { Icon(icon, null, tint = if (active) az.primary else az.textTertiary, modifier = Modifier.size(22.dp)) }
-                Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) az.primary else az.textTertiary)
+                    Modifier.weight(1f).height(BAR_HEIGHT.dp).clickable { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        icon, label, tint = if (active) az.primary else az.textTertiary,
+                        modifier = Modifier.size(22.dp).offset(y = if (active) (-7).dp else 0.dp),
+                    )
+                    if (active) {
+                        Text(
+                            label, style = MaterialTheme.typography.labelSmall, color = az.textPrimary,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                        )
+                    }
+                }
             }
         }
+        Box(
+            Modifier.align(Alignment.TopCenter).offset(y = (-(BALL_R + BALL_RISE)).dp)
+                .size((BALL_R * 2).dp).shadow(6.dp, CircleShape).clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Color(0xFF2F9BFF), Color(0xFF4F46E5))))
+                .clickable(onClickLabel = centerDescription, onClick = onCenter),
+            contentAlignment = Alignment.Center,
+        ) { Icon(centerIcon, centerDescription, tint = Color.White, modifier = Modifier.size(30.dp)) }
     }
 }
 

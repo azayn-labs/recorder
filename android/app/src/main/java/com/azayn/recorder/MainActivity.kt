@@ -1,5 +1,6 @@
 package com.azayn.recorder
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -7,7 +8,9 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +18,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +29,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +87,21 @@ private fun App() {
         }
     }
 
+    // Voice recorder: the ball in the middle of the bar starts it from either tab and stops it.
+    val ctx = LocalContext.current
+    val active by RecorderService.active.collectAsState()
+    var elapsed by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(active) {
+        val a = active ?: return@LaunchedEffect
+        while (true) {
+            elapsed = System.currentTimeMillis() - a.startedAt
+            delay(250)
+        }
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+        if (res[Manifest.permission.RECORD_AUDIO] == true) RecorderService.start(ctx)
+    }
+
     fun updateConfig(c: Store.Config) {
         config = c
         Store.saveConfig(c)
@@ -87,10 +110,23 @@ private fun App() {
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
-            FloatingTabBar(
-                tabs = listOf(Icons.Default.GraphicEq to "Recordings", Icons.Default.Settings to "Settings"),
+            val recording = active != null
+            NotchedNavBar(
+                tabs = listOf(Icons.Outlined.GraphicEq to "Recordings", Icons.Outlined.Settings to "Settings"),
                 selected = tab,
                 onSelect = { tab = it },
+                centerIcon = if (recording) Icons.Default.Stop else Icons.Default.Mic,
+                centerLabel = if (recording) Store.formatDuration(elapsed) else "Record",
+                centerLabelColor = if (recording) az.error else az.textTertiary,
+                centerDescription = if (recording) "Stop recording" else "Record a voice note",
+                onCenter = {
+                    if (recording) {
+                        RecorderService.stop(ctx)
+                    } else {
+                        tab = 0 // the saved recording (and its Rename prompt) shows on Recordings
+                        micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+                    }
+                },
                 modifier = Modifier.navigationBarsPadding(),
             )
         },

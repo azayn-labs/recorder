@@ -149,9 +149,6 @@ fun RecordingsScreen(
     // The file being recorded right now isn't playable yet.
     val visible = recordings.filter { it.file != active?.file }
 
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
-        if (res[Manifest.permission.RECORD_AUDIO] == true) RecorderService.start(ctx)
-    }
 
     BackHandler(enabled = openGroup != null) { openGroup = null }
 
@@ -160,14 +157,6 @@ fun RecordingsScreen(
         contentWindowInsets = WindowInsets(0),
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbar) },
-        floatingActionButton = {
-            if (active == null) {
-                GradientButton("Record", Icons.Default.Mic, onClick = {
-                    micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
-                })
-            }
-        },
-        bottomBar = { active?.let { RecordingBar(it) { RecorderService.stop(ctx) } } },
     ) { inner ->
         val group = openGroup
         if (group == null) {
@@ -452,35 +441,6 @@ private fun StatusBanner(status: Store.Status) {
     }
 }
 
-/** In-progress voice recording: the gradient strip (white text) with the timer and a stop button. */
-@Composable
-private fun RecordingBar(active: RecorderService.Active, onStop: () -> Unit) {
-    var elapsed by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(active) {
-        while (true) {
-            elapsed = System.currentTimeMillis() - active.startedAt
-            delay(250)
-        }
-    }
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        Modifier.fillMaxWidth().padding(16.dp).shadow(8.dp, shape).clip(shape).background(AzaynStripGradient)
-            .padding(start = 20.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(10.dp).background(Color.White, CircleShape))
-        Spacer(Modifier.size(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("Recording", style = MaterialTheme.typography.titleSmall, color = Color.White)
-            Text(Store.formatDuration(elapsed), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
-        }
-        Box(
-            Modifier.size(48.dp).clip(CircleShape).background(Color.White).clickable(onClick = onStop),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.Stop, "Stop", tint = Color(0xFF4F46E5), modifier = Modifier.size(26.dp)) }
-    }
-}
-
 @Composable
 fun AppBadge(app: String, size: Int = 40) {
     Box(
@@ -585,6 +545,7 @@ private fun PlayerSheet(rec: Store.Recording, onDismiss: () -> Unit, onRename: (
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete", tint = az.error) }
             }
             Spacer(Modifier.height(16.dp))
             Slider(
@@ -617,7 +578,6 @@ private fun PlayerSheet(rec: Store.Recording, onDismiss: () -> Unit, onRename: (
                     Icon(Icons.Default.Forward10, "Forward 10 seconds")
                 }
                 IconButton(onClick = { share(ctx, rec) }) { Icon(Icons.Default.Share, "Share") }
-                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete") }
             }
         }
     }
