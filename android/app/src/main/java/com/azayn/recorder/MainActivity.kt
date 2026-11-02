@@ -54,16 +54,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         UiPrefs.load(this)
+        RecorderControl.load(this)
         setContent {
-            AzaynTheme { AuroraBackground { App() } }
+            AzaynTheme { AuroraBackground { RecorderApp() } }
         }
     }
 }
 
 @Composable
-private fun App() {
+private fun RecorderApp() {
     var hasAccess by remember { mutableStateOf(Environment.isExternalStorageManager()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { hasAccess = Environment.isExternalStorageManager() }
+    val recorderPrefs by RecorderControl.prefs.collectAsState()
+    // First run: set up the on-phone start (it also grants storage access). People who start the
+    // recorder from a computer instead can skip it.
+    var setupOpen by rememberSaveable { mutableStateOf(!recorderPrefs.paired && !Store.status().running) }
+    LaunchedEffect(Unit) { if (Store.status().running && !recorderPrefs.paired) setupOpen = false }
+    if (setupOpen || (!hasAccess && !recorderPrefs.paired)) {
+        SetupScreen(
+            onDone = { setupOpen = false; hasAccess = Environment.isExternalStorageManager() },
+            onSkip = { setupOpen = false },
+        )
+        return
+    }
     if (!hasAccess) {
         AccessScreen()
         return
@@ -72,6 +85,7 @@ private fun App() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     // Shared, polled state: daemon status, recordings on disk, config.
     var status by remember { mutableStateOf(Store.Status(running = false)) }
+    var statusLoaded by remember { mutableStateOf(false) }
     var recordings by remember { mutableStateOf(emptyList<Store.Recording>()) }
     var config by remember { mutableStateOf(Store.Config()) }
     var reloadKey by remember { mutableIntStateOf(0) }
@@ -82,6 +96,7 @@ private fun App() {
         while (true) {
             val (s, r) = withContext(Dispatchers.IO) { Store.status() to Store.recordings() }
             status = s
+            statusLoaded = true
             if (r != recordings) recordings = r
             delay(2000)
         }
@@ -89,6 +104,19 @@ private fun App() {
 
     // Voice recorder: the ball in the middle of the bar starts it from either tab and stops it.
     val ctx = LocalContext.current
+
+    // Backstop for the boot/update triggers (Android can skip those): opening the app starts the
+    // recorder if it's off, or restarts it if it's still running an older build. Once per session,
+    // and never in the middle of a call.
+    var autoStarted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(status, recorderPrefs) {
+        if (!statusLoaded || autoStarted || !recorderPrefs.paired || !recorderPrefs.autoStart || RecorderControl.busy.value != null) return@LaunchedEffect
+        val outdated = status.running && status.version != com.azayn.recorder.daemon.Main.VERSION && status.state == "idle"
+        if (!status.running || outdated) {
+            autoStarted = true
+            SetupService.startRecorder(ctx)
+        }
+    }
     val active by RecorderService.active.collectAsState()
     var elapsed by remember { mutableLongStateOf(0L) }
     LaunchedEffect(active) {
@@ -137,6 +165,7 @@ private fun App() {
                 recordings = recordings,
                 status = status,
                 onChanged = { reloadKey++ },
+                onSetup = { setupOpen = true },
                 onNeverRecord = { name ->
                     if (config.never.none { it.name.equals(name, ignoreCase = true) }) {
                         updateConfig(config.copy(never = config.never + Store.Blocked(name, emptyList())))
@@ -144,7 +173,7 @@ private fun App() {
                 },
                 modifier = mod,
             )
-            else -> SettingsScreen(status = status, config = config, onChange = ::updateConfig, modifier = mod)
+            else -> SettingsScreen(status = status, config = config, onChange = ::updateConfig, onSetup = { setupOpen = true }, modifier = mod)
         }
     }
 }

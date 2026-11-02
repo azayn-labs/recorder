@@ -2,8 +2,8 @@
 
 # Azayn Recorder
 
-Automatic call recorder for a Samsung Galaxy Z Fold 7 (Android 17 / One UI), set up over adb.
-It records:
+Automatic call recorder for Android 12 and later, built and tested on a Samsung Galaxy Z Fold 7
+(Android 17 / One UI). It's a standalone app: no computer and no root. It records:
 
 - regular phone calls (SIM / cellular)
 - WhatsApp, Instagram and Facebook/Messenger calls (and any other VoIP app)
@@ -33,27 +33,62 @@ It records:
 
 ## Install
 
-1. Turn on **USB debugging** on the phone and connect it to a computer that has `adb`.
-2. From the [latest release](https://github.com/azayn-labs/recorder/releases/latest), download
-   `AzaynRecorder-vX.Y.Z.apk`, `callrec.dex` and `callrec.sh` into one folder.
-3. Run:
+1. On your phone, download `AzaynRecorder-vX.Y.Z.apk` from the
+   [latest release](https://github.com/azayn-labs/recorder/releases/latest) and open it. Allow
+   your browser to install apps if Android asks.
+2. Open **Azayn Recorder**. It walks you through a one-time setup (about two minutes):
+   1. Turn on **Developer options**: *Settings › About phone › Software information*, tap
+      *Build number* 7 times.
+   2. Connect to **Wi-Fi**.
+   3. Turn on **Wireless debugging** (the app opens it for you).
+   4. Tap **Start pairing**, then in Wireless debugging tap *Pair device with pairing code*, and
+      type the 6-digit code into the app's notification (or into the app in split screen).
+   5. The app starts the recorder. Calls are recorded from then on.
 
-   ```bash
-   chmod +x callrec.sh
-   ./callrec.sh app     # install the app and grant its permissions
-   ./callrec.sh start   # start the recorder; it keeps running after you unplug
-   ```
+After a restart the app starts the recorder again by itself once you're on Wi-Fi, or when you
+open it. Prefer a computer? See [Using a computer (optional)](#using-a-computer-optional).
 
-Run `./callrec.sh start` again after every phone restart. To build from source instead, see
-[Usage](#usage); maintainers publishing a version, see [`docs/RELEASING.md`](docs/RELEASING.md).
+## Permissions and privacy
+
+A call recorder needs access that most apps never ask for, so here is exactly what each piece
+is for. **Recordings stay on your phone.** The app has no servers, accounts, analytics or ads,
+and it never uploads anything. It's open source, so you can check all of this in the code.
+
+**Why Wireless debugging?** Since Android 10, normal apps can't record calls: the call audio
+needs `CAPTURE_AUDIO_OUTPUT` and `CAPTURE_VOICE_COMMUNICATION_OUTPUT`, which only the system
+and the debugging shell have, and other apps' microphones are silenced during calls. So the app
+pairs with your phone's own Wireless debugging, like a computer would, and uses it to start its
+recorder as the shell user. That recorder is the only part that touches call audio.
+
+Pairing gives the app the same access a computer with USB debugging has. It uses it for
+exactly two things, both in [`RecorderControl.kt`](android/app/src/main/java/com/azayn/recorder/RecorderControl.kt):
+granting itself the permissions in the table below, and starting the recorder. You can undo it
+any time: turn off Wireless debugging (the app does this itself after starting the recorder
+unless you change that in Settings), tap *Revoke adb debugging authorizations* in Developer
+options, or uninstall the app.
+
+| Permission | Why |
+|---|---|
+| Wireless debugging pairing (shell access) | Start the call recorder, which needs the shell user's audio permissions |
+| All files access | Save recordings to `/sdcard/CallRecorder` and play, rename and delete them there |
+| Microphone | Your side of WhatsApp/Instagram/Facebook calls, and the voice recorder |
+| Contacts | Name recordings after the contact, and pick people for the *Never record* list |
+| Notifications | The live "recording" notification with Stop/Discard, and the pairing-code field |
+| Nearby devices / local network | Find your phone's Wireless debugging service on the Wi-Fi network |
+| Internet, network and Wi-Fi state | Connect to that service, which runs on the phone itself; nothing goes off the phone |
+| Modify secure settings | Granted during setup; turns Wireless debugging on to start the recorder after a restart, and off again |
+| Run at startup, foreground service | Restart the recorder after a reboot or app update |
 
 ## How it works
 
 Normal Android apps can't capture call audio. The `shell` user that adb runs as can,
 because it holds `CAPTURE_AUDIO_OUTPUT` and `CAPTURE_VOICE_COMMUNICATION_OUTPUT`.
-So the recorder is a small Java daemon (`daemon/src`), compiled to a dex file and started
-with `app_process` as the shell user (the same technique scrcpy uses). It detaches from
-adb, so it keeps running after you unplug USB, until the phone reboots.
+So the recorder is a small Java daemon (`daemon/src`) started with `app_process` as the shell
+user (the same technique scrcpy uses). It's compiled into the APK, and the app launches it
+straight from its own `base.apk` over on-device ADB
+([libadb-android](https://github.com/MuntashirAkon/libadb-android), shell v2 protocol so adbd
+doesn't kill it when the command returns). It runs on its own after that, until the phone
+restarts, even with Wireless debugging off.
 
 The daemon checks the audio mode every 500 ms:
 
@@ -89,34 +124,31 @@ call log (phone calls) or the app's ongoing-call notification (VoIP), and is `Un
 neither is available. Recordings under 2 s are dropped.
 You can browse them in *My Files › Internal storage › CallRecorder*.
 
-## Companion app (`android/`)
-
-The **Azayn Recorder** app on the phone (package `com.azayn.recorder`; `./callrec.sh app` builds,
-installs and grants its permissions):
+## The app (`android/`)
 
 - **Recordings tab:** one row per app + contact (e.g. "Jane Doe · WhatsApp · 3 calls") plus
   "Voice recordings". Tap a row for that contact's recordings by day. Filter by app, and search
   contacts or recording names. Built-in player (seek, ±10 s), rename, share, delete, and
-  "Never record" for a contact. A banner shows when the call recorder is not running or is
-  recording right now.
-- **Record button:** the round gradient button in the middle of the bottom bar (Health's notched
-  bar). It turns into Stop with a running timer while recording. It's a microphone recorder (foreground service, so it keeps going with the
-  screen off; stop from the app or the notification). Saves to `Recordings/`, then offers to rename.
+  "Never record" for a contact. A banner shows when the recorder is off (with a Start button)
+  or is recording right now.
+- **Record button:** the round gradient button in the middle of the bottom bar. It turns into
+  Stop with a running timer while recording. It's a microphone recorder (foreground service, so
+  it keeps going with the screen off; stop from the app or the notification). Saves to
+  `Recordings/`, then offers to rename.
 - **Live notification:** while a call is being recorded, an ongoing notification shows the
   app, the contact and a running timer, with **Stop** (keep what's recorded so far and skip the
   rest of the call) and **Discard** (delete it). It's an Android Live Update, so it also appears
   as a status-bar chip and in Samsung's Now Bar. The voice recorder shows one too.
-- **Look:** the Azayn mobile theme shared with Azayn Health and Pay: Inter, white panels on a
-  cool grey ground (navy in dark mode), and the blue-to-violet gradient for primary actions.
-  *Settings › Appearance* picks System, Light or Dark.
-- **About:** version, source code, license, and *Support Azayn Recorder* (Ko-fi).
 - **Rename:** any recording can be renamed. This renames the file itself. The original date
   and time are kept and still shown.
-- **Settings tab:** recorder status, a master "Record calls" switch, per-app switches
-  (Phone, WhatsApp, Instagram, Facebook, Messenger, other apps), and the **Never record**
-  list. Add people from your contacts (all their numbers) or by name/username.
+- **Settings tab:** recorder status; *Recorder* (start/restart, start after restart, turn
+  Wireless debugging off afterwards, pair again); a master "Record calls" switch and per-app
+  switches (Phone, WhatsApp, Instagram, Facebook, Messenger, other apps); audio format; the
+  **Never record** list (from contacts, or by name/username); appearance (System, Light, Dark);
+  and About (version, source, license, *Support Azayn Recorder* on Ko-fi).
+- **Look:** the Azayn mobile theme shared with Azayn Health and Pay.
 
-The app and the daemon talk through two files in `/sdcard/CallRecorder`:
+The app and the daemon talk through files in `/sdcard/CallRecorder`:
 
 - `.config.json`: written by the app, read by the daemon at the start of each call.
 - `.status.json`: the daemon's heartbeat, every 2 s.
@@ -134,11 +166,14 @@ How the never-record list is enforced:
 | Outgoing phone call | number/name from the call log | after hang-up; the file is deleted right away (Android doesn't expose the dialed number during the call) |
 | WhatsApp / Instagram / Facebook | name or username shown in the app's call notification | a few seconds into the call; the partial recording is discarded |
 
-## Usage
+## Using a computer (optional)
+
+Instead of the on-phone setup, you can start the recorder over USB with `callrec.sh`
+(attached to every release, or in this repo). In the app, tap *Skip, I start it from a computer*.
 
 ```
-./callrec.sh start      # build, push, (re)start. Run it again after every phone reboot
-./callrec.sh app        # build + install the companion app
+./callrec.sh start      # (re)start the recorder; run again after every phone restart
+./callrec.sh app        # install the app and grant its permissions
 ./callrec.sh status     # running? + recent log
 ./callrec.sh log        # follow log (shows each source's peak level during a call)
 ./callrec.sh selftest   # check which capture sources work on this firmware
@@ -146,14 +181,19 @@ How the never-record list is enforced:
 ./callrec.sh stop
 ```
 
-Building needs the Android SDK (`$ANDROID_HOME`, platform + build-tools) and a JDK 17+
-(Android Studio's bundled one is found automatically).
+From a release download it uses the `callrec.dex` and APK next to it, so only `adb` is needed.
+In a source checkout it builds first, which needs the Android SDK (`$ANDROID_HOME`, platform +
+build-tools) and a JDK 17+ (Android Studio's bundled one is found automatically). Maintainers
+publishing a version, see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Limitations
 
-- **Restart needed after every reboot.** Run `./callrec.sh start` again over USB. Without
-  a PC you can use Wireless debugging plus an on-phone adb client (for example Termux's
-  `android-tools`) to run the same `app_process` command.
+- **Wi-Fi to start.** Wireless debugging only works on Wi-Fi, so starting the recorder (first
+  setup, after a restart) needs it. Once running, the recorder works on any network.
+- **Developer options stay on.** Turning them off disables Wireless debugging, so the app can't
+  start the recorder after the next restart.
+- **After a restart** the recorder isn't running until the app starts it again (automatically
+  on Wi-Fi, or when you open the app).
 - Any app that switches to communication mode gets recorded (Telegram, Meet, Discord, ...).
   Each one lands in a folder named after its package.
 
@@ -221,5 +261,7 @@ excluded.
 Apache License 2.0, see [`LICENSE`](LICENSE). © 2026 [Azayn](https://azayn.com).
 
 Third-party code and assets are listed in [`NOTICE`](NOTICE): parts of the daemon are adapted from
-[scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0), and the app bundles the
-[Inter](https://github.com/rsms/inter) typeface (SIL Open Font License 1.1).
+[scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0); the app bundles the
+[Inter](https://github.com/rsms/inter) typeface (SIL Open Font License 1.1) and, for on-device
+ADB, [libadb-android](https://github.com/MuntashirAkon/libadb-android) (Apache-2.0),
+spake2-java (LGPL-3.0), Bouncy Castle (MIT-style) and AndroidHiddenApiBypass (Apache-2.0).

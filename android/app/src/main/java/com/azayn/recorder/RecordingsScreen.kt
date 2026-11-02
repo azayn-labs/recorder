@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -123,6 +124,7 @@ fun RecordingsScreen(
     recordings: List<Store.Recording>,
     status: Store.Status,
     onChanged: () -> Unit,
+    onSetup: () -> Unit,
     onNeverRecord: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -160,7 +162,7 @@ fun RecordingsScreen(
     ) { inner ->
         val group = openGroup
         if (group == null) {
-            GroupList(visible, status, onOpen = { openGroup = it }, onPlay = { playing = it }, Modifier.padding(inner))
+            GroupList(visible, status, onSetup, onOpen = { openGroup = it }, onPlay = { playing = it }, Modifier.padding(inner))
         } else {
             GroupDetail(
                 group,
@@ -221,6 +223,7 @@ private data class GroupSummary(val group: Store.Group, val count: Int, val late
 private fun GroupList(
     recordings: List<Store.Recording>,
     status: Store.Status,
+    onSetup: () -> Unit,
     onOpen: (Store.Group) -> Unit,
     onPlay: (Store.Recording) -> Unit,
     modifier: Modifier,
@@ -241,7 +244,7 @@ private fun GroupList(
 
     Column(modifier.fillMaxSize()) {
         ScreenTitle("Recordings")
-        StatusBanner(status)
+        StatusBanner(status, onSetup)
         SearchField(query, { query = it })
         if (apps.size > 1) {
             LazyRow(
@@ -426,18 +429,41 @@ private fun RecordingRow(rec: Store.Recording, onClick: () -> Unit, onRename: ()
 // ---- shared pieces ----
 
 @Composable
-private fun StatusBanner(status: Store.Status) {
-    val (text, recording) = when {
-        !status.running -> "Call recorder not running. Connect USB and run ./callrec.sh start" to false
-        status.state == "recording" -> "Recording ${status.app ?: "call"}${status.peer?.let { " · $it" } ?: ""}" to true
-        else -> return
-    }
-    Panel(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fill = az.errorBg) {
-        PanelRow(
-            text,
-            leading = { IconWell(if (recording) Icons.Default.FiberManualRecord else Icons.Default.ErrorOutline, tint = az.error, fill = az.surface, size = 32) },
-            titleColor = az.error,
-        )
+private fun StatusBanner(status: Store.Status, onSetup: () -> Unit) {
+    val ctx = LocalContext.current
+    val prefs by RecorderControl.prefs.collectAsState()
+    val busy by RecorderControl.busy.collectAsState()
+    val error by SetupService.message.collectAsState()
+    when {
+        status.running && status.state == "recording" -> Panel(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fill = az.errorBg) {
+            PanelRow(
+                "Recording ${status.app ?: "call"}${status.peer?.let { " · $it" } ?: ""}",
+                leading = { IconWell(Icons.Default.FiberManualRecord, tint = az.error, fill = az.surface, size = 32) },
+                titleColor = az.error,
+            )
+        }
+        status.running && status.version != com.azayn.recorder.daemon.Main.VERSION && prefs.paired ->
+            Panel(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                PanelRow(
+                    "Recorder update ready", hint = busy ?: "Restart it to use this version",
+                    leading = { IconWell(Icons.Default.Refresh, size = 32) },
+                ) { if (busy == null) TextButton(onClick = { SetupService.startRecorder(ctx) }) { Text("Restart") } }
+            }
+        !status.running -> Panel(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fill = az.errorBg) {
+            PanelRow(
+                if (prefs.paired) "Recorder is off" else "Recorder not set up",
+                hint = busy ?: error ?: if (prefs.paired) "Calls aren't being recorded" else "Pair once with Wireless debugging",
+                leading = { IconWell(Icons.Default.ErrorOutline, tint = az.error, fill = az.surface, size = 32) },
+                titleColor = az.error,
+            ) {
+                if (busy == null) {
+                    TextButton(onClick = { if (prefs.paired) SetupService.startRecorder(ctx) else onSetup() }) {
+                        Text(if (prefs.paired) "Start" else "Set up")
+                    }
+                }
+            }
+        }
+        else -> Unit
     }
 }
 

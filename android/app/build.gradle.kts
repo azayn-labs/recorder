@@ -41,11 +41,15 @@ android {
         }
     }
 
+    // The recorder daemon is compiled into the APK too: the app launches it with
+    // app_process straight from its own base.apk over on-device ADB (see Adb.kt).
+    sourceSets["main"].java.directories.add("../../daemon/src")
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
@@ -62,4 +66,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+
+    // On-device ADB over Wireless debugging (pairing, TLS connect, shell), as used by App Manager.
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81") // the self-signed cert libadb pairs with
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.2")
 }

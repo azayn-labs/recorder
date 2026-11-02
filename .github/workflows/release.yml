@@ -70,14 +70,12 @@ jobs:
           cat > notes.md <<NOTES
           ### Install
 
-          You need a computer with \`adb\` and the phone connected with USB debugging on.
-          Download **AzaynRecorder-$GITHUB_REF_NAME.apk**, **callrec.dex** and **callrec.sh** into one folder, then:
+          On your phone, download **AzaynRecorder-$GITHUB_REF_NAME.apk**, install it and open it. The app walks you
+          through a one-time setup with Wireless debugging; no computer or root needed. Why it needs each permission:
+          [Permissions and privacy](https://github.com/$GITHUB_REPOSITORY#permissions-and-privacy).
 
-          \`\`\`bash
-          chmod +x callrec.sh
-          ./callrec.sh app     # install the app and grant its permissions
-          ./callrec.sh start   # start the recorder (run again after every phone restart)
-          \`\`\`
+          Prefer a computer? Put the APK, **callrec.dex** and **callrec.sh** in one folder and run
+          \`./callrec.sh app\` then \`./callrec.sh start\`.
 
           Recording calls may be illegal without everyone's consent where you or the other person are.
           See the [legal notice](https://github.com/$GITHUB_REPOSITORY#legal-notice-and-disclaimer).

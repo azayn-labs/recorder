@@ -16,3 +16,16 @@ This product bundles the Inter typeface (android/app/src/main/res/font/inter.ttf
 Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter),
 licensed under the SIL Open Font License, Version 1.1
 (see docs/licenses/Inter-OFL.txt).
+
+The Android app bundles these libraries for on-device ADB (pairing with and connecting to
+the phone's own Wireless debugging):
+  - libadb-android (https://github.com/MuntashirAkon/libadb-android),
+    Copyright 2021 Muntashir Al-Islam, dual-licensed GPL-3.0-or-later or Apache-2.0;
+    used here under the Apache License, Version 2.0.
+  - spake2-java / spake2-android (https://github.com/MuntashirAkon/spake2-java),
+    Copyright 2021 Muntashir Al-Islam, licensed under the GNU LGPL, Version 3.0. Its source
+    is available at that address; it is used unmodified as a separate library.
+  - Bouncy Castle (https://www.bouncycastle.org), Copyright The Legion of the Bouncy Castle
+    Inc., licensed under the Bouncy Castle License (MIT-style).
+  - AndroidHiddenApiBypass (https://github.com/LSPosed/AndroidHiddenApiBypass),
+    licensed under the Apache License, Version 2.0.

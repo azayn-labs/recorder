@@ -8,7 +8,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Folder
@@ -72,8 +77,11 @@ fun SettingsScreen(
     status: Store.Status,
     config: Store.Config,
     onChange: (Store.Config) -> Unit,
+    onSetup: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val recorder by RecorderControl.prefs.collectAsState()
+    val busy by RecorderControl.busy.collectAsState()
     val ctx = LocalContext.current
     var showPicker by remember { mutableStateOf(false) }
     var showManual by remember { mutableStateOf(false) }
@@ -94,6 +102,45 @@ fun SettingsScreen(
     ) {
         item { ScreenTitle("Settings", inset = 4.dp) }
         item { StatusCard(status) }
+
+        item { SectionLabel("Recorder") }
+        item {
+            Panel {
+                if (recorder.paired) {
+                    PanelRow(
+                        if (status.running) "Restart the recorder" else "Start the recorder now",
+                        hint = busy ?: "Uses Wireless debugging on this phone; no computer needed",
+                        icon = Icons.Default.PlayCircleOutline,
+                        enabled = busy == null,
+                        onClick = { SetupService.startRecorder(ctx) },
+                    ) { Chevron() }
+                    PanelDivider()
+                    PanelRow(
+                        "Start after the phone restarts",
+                        hint = "When you're on Wi-Fi",
+                        icon = Icons.Default.RestartAlt,
+                        onClick = { RecorderControl.update(ctx, recorder.copy(autoStart = !recorder.autoStart)) },
+                    ) { Switch(recorder.autoStart, { RecorderControl.update(ctx, recorder.copy(autoStart = it)) }) }
+                    PanelDivider()
+                    PanelRow(
+                        "Turn off Wireless debugging afterwards",
+                        hint = "The recorder keeps running; safer on shared Wi-Fi",
+                        icon = Icons.Default.WifiOff,
+                        onClick = { RecorderControl.update(ctx, recorder.copy(wirelessOffAfter = !recorder.wirelessOffAfter)) },
+                    ) { Switch(recorder.wirelessOffAfter, { RecorderControl.update(ctx, recorder.copy(wirelessOffAfter = it)) }) }
+                    PanelDivider()
+                }
+                PanelRow(
+                    if (recorder.paired) "Pair again" else "Set up on this phone",
+                    hint = if (recorder.paired) "If the phone stops trusting the app" else "Start the recorder without a computer",
+                    icon = Icons.Default.Link,
+                    onClick = {
+                        if (recorder.paired) RecorderControl.update(ctx, recorder.copy(paired = false))
+                        onSetup()
+                    },
+                ) { Chevron() }
+            }
+        }
 
         item { SectionLabel("Recording") }
         item {
@@ -232,7 +279,7 @@ private fun StatusCard(status: Store.Status) {
     val s = when {
         !status.running -> S(
             Icons.Default.ErrorOutline, az.error, az.errorBg, "Recorder not running",
-            "It stops when the phone restarts. Connect USB and run ./callrec.sh start on your computer.",
+            "Calls aren't being recorded. Start it below.",
         )
         status.state == "recording" -> S(
             Icons.Default.FiberManualRecord, az.error, az.errorBg, "Recording now",

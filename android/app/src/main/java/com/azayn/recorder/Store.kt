@@ -176,6 +176,9 @@ object Store {
 
     data class Status(
         val running: Boolean,
+        val heartbeat: Long = 0,
+        /** Daemon build; differs from [com.azayn.recorder.daemon.Main.VERSION] after an app update. */
+        val version: Int = 0,
         val state: String = "idle",
         val app: String? = null,
         val peer: String? = null,
@@ -190,6 +193,8 @@ object Store {
         if (!fresh) return Status(running = false)
         return Status(
             running = true,
+            heartbeat = o.optLong("heartbeat"),
+            version = o.optInt("version"),
             state = o.optString("state", "idle"),
             app = o.optString("app").ifEmpty { null },
             peer = o.optString("peer").ifEmpty { null },

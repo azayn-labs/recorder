@@ -5,9 +5,9 @@ version tag is pushed. The workflow signs the APK with the project's release key
 (kept only in the encrypted secrets of the repository's `release` environment) and
 attaches these files to a new GitHub Release:
 
-- `AzaynRecorder-vX.Y.Z.apk`, the app
-- `callrec.dex`, the prebuilt recorder daemon
-- `callrec.sh`, which installs the app and starts the daemon from those files
+- `AzaynRecorder-vX.Y.Z.apk`, the app (it includes the recorder daemon and starts it itself)
+- `callrec.dex`, the daemon on its own, for starting it from a computer instead
+- `callrec.sh`, which does that from those files
 - `SHA256SUMS`
 
 ## Publishing a release
