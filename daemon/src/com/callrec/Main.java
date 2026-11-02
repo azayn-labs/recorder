@@ -20,7 +20,7 @@ import java.util.Locale;
  * honoring the companion app's .config.json and reporting to .status.json.
  */
 public final class Main {
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     private static final long POLL_MS = 500;
     private static final int START_POLLS = 2; // call mode must hold for 1 s before recording
@@ -205,7 +205,7 @@ public final class Main {
                 Log.i("deleted: contact is on the never-record list");
                 return;
             }
-            peer = p.display();
+            peer = p.display() != null ? p.display() : currentNumber;
         } else {
             // Unknown apps were recorded provisionally; now the "Other" switch applies.
             if (!config.appEnabled(app)) {
@@ -216,11 +216,15 @@ public final class Main {
             peer = currentPeer;
         }
 
-        String stamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(new Date(rec.startedAt));
-        String name = stamp + (peer != null ? "_" + sanitize(peer) : "") + ".m4a";
-        File dir = new File(root, app);
+        // <root>/<App>/<contact or number>/YYYY-MM-DD-HH-MM-SS.m4a
+        String stamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.US).format(new Date(rec.startedAt));
+        String contact = peer != null ? sanitize(peer) : "";
+        File dir = new File(new File(root, app), contact.isEmpty() ? "Unknown" : contact);
         dir.mkdirs();
-        File dest = new File(dir, name);
+        File dest = new File(dir, stamp + ".m4a");
+        for (int i = 2; dest.exists(); i++) {
+            dest = new File(dir, stamp + "-" + i + ".m4a");
+        }
         if (rec.file.renameTo(dest)) {
             Log.i("saved " + dest);
         } else {
@@ -229,7 +233,8 @@ public final class Main {
     }
 
     private static String sanitize(String s) {
-        String r = s.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").replaceAll("\\s+", " ").trim();
+        // Also strip leading dots so a name can't produce a hidden or "." / ".." folder.
+        String r = s.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").replaceAll("\\s+", " ").trim().replaceAll("^\\.+", "");
         return r.length() > 80 ? r.substring(0, 80) : r;
     }
 

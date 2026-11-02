@@ -24,24 +24,70 @@ object Store {
 
     // ---- recordings ----
 
-    data class Recording(val file: File, val app: String, val time: Long, val peer: String?) {
-        val title: String get() = peer ?: "Unknown"
+    /** Folder (next to the app folders) for recordings made with the in-app microphone recorder. */
+    const val MEMOS = "Recordings"
+    val memoDir get() = File(root, MEMOS)
+
+    /**
+     * A call is CallRecorder/<app>/<contact>/<name>.m4a, a voice recording is CallRecorder/Recordings/<name>.m4a.
+     * <name> is YYYY-MM-DD-HH-MM-SS until the user renames it.
+     */
+    data class Recording(val file: File, val app: String, val contact: String?, val time: Long) {
+        val isMemo get() = app == MEMOS
+        /** User-given name, or null if the file still has its timestamp name. */
+        val customName: String? get() = file.nameWithoutExtension.takeUnless { STAMP.matches(it) }
+        val group get() = Group(app, contact)
     }
 
-    private val stampFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
+    /** Recordings are listed per (app, contact); voice recordings form one group with contact == null. */
+    data class Group(val app: String, val contact: String?) {
+        val title get() = contact ?: "Voice recordings"
+    }
+
+    private val STAMP = Regex("""\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}(-\d+)?""")
+    private val stampFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.US)
+
+    fun newMemoFile(): File {
+        memoDir.mkdirs()
+        return File(memoDir, stampFormat.format(Date()) + ".m4a")
+    }
 
     fun recordings(): List<Recording> {
-        val dirs = root.listFiles { f -> f.isDirectory && !f.name.startsWith(".") } ?: return emptyList()
-        return dirs.flatMap { dir ->
-            (dir.listFiles { f -> f.isFile && f.name.endsWith(".m4a") } ?: emptyArray()).map { parse(it, dir.name) }
+        val apps = root.listFiles { f -> f.isDirectory && !f.name.startsWith(".") } ?: return emptyList()
+        return apps.flatMap { appDir ->
+            if (appDir.name == MEMOS) {
+                audioFiles(appDir).map { recording(it, MEMOS, null) }
+            } else {
+                (appDir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") } ?: emptyArray()).flatMap { contactDir ->
+                    audioFiles(contactDir).map { recording(it, appDir.name, contactDir.name) }
+                }
+            }
         }.sortedByDescending { it.time }
     }
 
-    private fun parse(file: File, app: String): Recording {
-        val base = file.name.removeSuffix(".m4a")
-        val time = runCatching { stampFormat.parse(base.take(19))!!.time }.getOrElse { file.lastModified() }
-        val peer = base.drop(20).ifBlank { null }
-        return Recording(file, app, time, peer)
+    private fun audioFiles(dir: File) = dir.listFiles { f -> f.isFile && f.name.endsWith(".m4a") }.orEmpty().toList()
+
+    private fun recording(file: File, app: String, contact: String?): Recording {
+        val name = file.nameWithoutExtension
+        val time = if (STAMP.matches(name)) {
+            runCatching { stampFormat.parse(name.take(19))!!.time }.getOrNull()
+        } else null
+        // Renaming keeps the file's modification time, so renamed files still sort by when they were made.
+        return Recording(file, app, contact, time ?: file.lastModified())
+    }
+
+    /** Characters that can't be in a file name. Returns null if the name is unusable. */
+    fun cleanName(name: String): String? =
+        name.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), "").trim().trimStart('.').take(120).ifEmpty { null }
+
+    /** Renames a recording in place. Returns the renamed recording, or null if the name is taken or invalid. */
+    fun rename(rec: Recording, newName: String): Recording? {
+        val clean = cleanName(newName) ?: return null
+        val dest = File(rec.file.parentFile, "$clean.m4a")
+        if (dest == rec.file) return rec
+        if (dest.exists() || !rec.file.renameTo(dest)) return null
+        durations.remove(rec.file.path)
+        return rec.copy(file = dest)
     }
 
     private val durations = ConcurrentHashMap<String, Long>()
@@ -59,6 +105,9 @@ object Store {
     fun delete(rec: Recording) {
         rec.file.delete()
         durations.remove(rec.file.path)
+        // Drop the contact folder once its last recording is gone.
+        val dir = rec.file.parentFile
+        if (!rec.isMemo && dir != null && dir.list().isNullOrEmpty()) dir.delete()
     }
 
     // ---- config ----

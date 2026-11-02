@@ -27,23 +27,33 @@ The two sides are mixed to mono and encoded as 64 kbps AAC.
 
 ```
 /sdcard/CallRecorder/
-  Phone/      2026-11-02_14-03-11_John_+4915123456789.m4a
-  WhatsApp/   2026-11-02_15-20-45_Jane.m4a
-  Instagram/
-  Facebook/   (or Messenger/)
+  Phone/John Smith/2026-11-02-14-03-11.m4a
+  Phone/+44 7700 900123/2026-11-02-16-40-02.m4a    (number not in contacts)
+  WhatsApp/Jane Doe/2026-11-02-15-20-45.m4a
+  Instagram/john_doe/...
+  Facebook/... or Messenger/...
+  Recordings/2026-11-02-11-05-16.m4a               (in-app voice recorder)
+  Recordings/Flat viewing notes.m4a                (renamed in the app)
 ```
 
-Names come from the call log for cellular calls, and from the app's ongoing-call
-notification title for VoIP calls. They're best effort. Recordings under 2 s are dropped.
+i.e. `<app>/<contact or number>/YYYY-MM-DD-HH-MM-SS.m4a`. The contact folder comes from the
+call log (phone calls) or the app's ongoing-call notification (VoIP), and is `Unknown` if
+neither is available. Recordings under 2 s are dropped.
 You can browse them in *My Files › Internal storage › CallRecorder*.
 
 ## Companion app (`android/`)
 
 The **Call Recorder** app on the phone (`./callrec.sh app` builds, installs and grants its permissions):
 
-- **Recordings tab:** recordings grouped by day, filter by app, search by name or number,
-  built-in player (seek, ±10 s), share, delete, and "Never record this person" from a row's menu.
-  A banner shows when the recorder is not running or is recording right now.
+- **Recordings tab:** one row per app + contact (e.g. "Jane Doe · WhatsApp · 3 calls") plus
+  "Voice recordings". Tap a row for that contact's recordings by day. Filter by app, and search
+  contacts or recording names. Built-in player (seek, ±10 s), rename, share, delete, and
+  "Never record" for a contact. A banner shows when the call recorder is not running or is
+  recording right now.
+- **Record button:** a microphone recorder (foreground service, so it keeps going with the
+  screen off; stop from the app or the notification). Saves to `Recordings/`, then offers to rename.
+- **Rename:** any recording can be renamed. This renames the file itself. The original date
+  and time are kept and still shown.
 - **Settings tab:** recorder status, a master "Record calls" switch, per-app switches
   (Phone, WhatsApp, Instagram, Facebook, Messenger, other apps), and the **Never record**
   list. Add people from your contacts (all their numbers) or by name/username.

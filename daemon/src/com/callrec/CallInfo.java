@@ -149,11 +149,8 @@ public final class CallInfo {
             this.number = number;
         }
 
-        /** "Name (number)", "Name" or "number"; null if nothing is known. */
+        /** Contact name if saved, else the number; null if nothing is known. */
         public String display() {
-            if (name != null && number != null) {
-                return name + " (" + number + ")";
-            }
             return name != null ? name : number;
         }
     }

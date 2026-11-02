@@ -77,7 +77,7 @@ private fun App() {
         while (true) {
             val (s, r) = withContext(Dispatchers.IO) { Store.status() to Store.recordings() }
             status = s
-            if (r.map { it.file } != recordings.map { it.file }) recordings = r
+            if (r != recordings) recordings = r
             delay(2000)
         }
     }
@@ -106,7 +106,7 @@ private fun App() {
             0 -> RecordingsScreen(
                 recordings = recordings,
                 status = status,
-                onDeleted = { rec -> recordings = recordings - rec },
+                onChanged = { reloadKey++ },
                 onNeverRecord = { name ->
                     if (config.never.none { it.name.equals(name, ignoreCase = true) }) {
                         updateConfig(config.copy(never = config.never + Store.Blocked(name, emptyList())))
