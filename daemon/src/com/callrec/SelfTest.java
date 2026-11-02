@@ -2,6 +2,7 @@ package com.callrec;
 
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 
@@ -12,6 +13,10 @@ public final class SelfTest {
 
     public static void main(String[] args) throws Exception {
         Env.init();
+        if (args.length > 0 && args[0].equals("simcall")) {
+            simulateVoipCall();
+            System.exit(0);
+        }
         audioInfo();
         test(Sources.mic());
         test(Sources.voipDownlink());
@@ -46,6 +51,20 @@ public final class SelfTest {
                 .build();
         t.write(pcm, 0, pcm.length);
         return t;
+    }
+
+    /** Pretends to be a VoIP app for ~6 s so the running daemon records it end to end. */
+    private static void simulateVoipCall() throws InterruptedException {
+        AudioManager am = CallInfo.audioManager();
+        am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+        AudioTrack tone = tone();
+        tone.play();
+        Log.i("simulated call: mode=" + am.getMode());
+        Thread.sleep(6000);
+        tone.stop();
+        tone.release();
+        am.setMode(AudioManager.MODE_NORMAL);
+        Log.i("simulated call ended");
     }
 
     private static void audioInfo() {

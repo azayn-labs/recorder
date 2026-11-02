@@ -5,6 +5,7 @@
 #   ./callrec.sh start     build, push and start the daemon (survives unplugging USB)
 #   ./callrec.sh stop      stop the daemon (finalizes an in-progress recording)
 #   ./callrec.sh selftest  check which capture sources work on this phone
+#   ./callrec.sh selftest simcall   fake a 6 s VoIP call (daemon should save a file)
 #   ./callrec.sh status    is it running? + last log lines
 #   ./callrec.sh log       follow the daemon log
 #   ./callrec.sh pull [dir]  copy recordings to this computer (default ./recordings)
@@ -78,8 +79,8 @@ case "${1:-}" in
     status) status ;;
     selftest)
         build
-        $ADB push build/callrec.dex "$DEX_REMOTE" >/dev/null
-        $ADB shell "CLASSPATH=$DEX_REMOTE app_process / com.callrec.SelfTest" | grep -v '^\s*at '
+        $ADB push build/callrec.dex /data/local/tmp/callrec-test.dex >/dev/null
+        $ADB shell "CLASSPATH=/data/local/tmp/callrec-test.dex app_process / com.callrec.SelfTest ${2:-}" | grep -v '^\s*at '
         ;;
     log) $ADB shell "tail -n 50 -f $LOG_REMOTE" ;;
     pull)
@@ -87,5 +88,5 @@ case "${1:-}" in
         mkdir -p "$dest"
         $ADB pull "$OUT_REMOTE/." "$dest"
         ;;
-    *) sed -n '2,11p' "$0"; exit 1 ;;
+    *) sed -n '2,12p' "$0"; exit 1 ;;
 esac

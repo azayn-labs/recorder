@@ -9,6 +9,7 @@ import android.media.MediaRecorder;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -26,6 +27,8 @@ public final class CallInfo {
         LABELS.put("com.facebook.orca", "Messenger");
         LABELS.put("com.facebook.mlite", "Messenger");
     }
+
+    private static AudioManager audioManager;
 
     private CallInfo() {
     }
@@ -76,8 +79,19 @@ public final class CallInfo {
         return pkgs != null && pkgs.length > 0 ? pkgs[0] : null;
     }
 
-    public static AudioManager audioManager() {
-        return (AudioManager) Env.context().getSystemService(Context.AUDIO_SERVICE);
+    /** An AudioManager bound to our shell context (the system one has no app context). */
+    public static synchronized AudioManager audioManager() {
+        if (audioManager == null) {
+            try {
+                Constructor<AudioManager> c = AudioManager.class.getDeclaredConstructor(Context.class);
+                c.setAccessible(true);
+                audioManager = c.newInstance(Env.context());
+            } catch (Throwable t) {
+                Log.e("AudioManager(Context) failed, using system service", t);
+                audioManager = (AudioManager) Env.context().getSystemService(Context.AUDIO_SERVICE);
+            }
+        }
+        return audioManager;
     }
 
     private static final Pattern RECORD = Pattern.compile("NotificationRecord\\(.*?pkg=(\\S+)");
