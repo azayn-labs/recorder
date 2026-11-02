@@ -20,7 +20,7 @@ import java.util.Locale;
  * honoring the companion app's .config.json and reporting to .status.json.
  */
 public final class Main {
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
 
     private static final long POLL_MS = 500;
     private static final int START_POLLS = 2; // call mode must hold for 1 s before recording
@@ -38,6 +38,8 @@ public final class Main {
     /** Kind of a call we decided not to record; set until that call ends. */
     private static Recording.Kind skipping;
     private static String skipReason;
+    /** The user hit "Stop" on the notification: capture has ended but the call hasn't. */
+    private static boolean stoppedEarly;
 
     private Main() {
     }
@@ -48,7 +50,11 @@ public final class Main {
         writePid();
         Log.i("callrec v" + VERSION + " started, pid " + android.os.Process.myPid() + ", saving to " + root);
 
-        Runtime.getRuntime().addShutdownHook(new Thread(Main::finish));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            finish();
+            Notify.flush();
+        }));
+        Notify.idle(); // clear a notification left over from a previous run
 
         AudioManager am = CallInfo.audioManager();
         Recording.Kind pending = null;
@@ -82,8 +88,9 @@ public final class Main {
                 }
             } else if (kind == current.kind) {
                 idlePolls = 0;
+                handleControl();
                 long now = System.currentTimeMillis();
-                if (current.kind == Recording.Kind.VOIP && now >= nextPeerCheck) {
+                if (current != null && current.kind == Recording.Kind.VOIP && now >= nextPeerCheck) {
                     refreshVoipInfo(am);
                     nextPeerCheck = now + PEER_REFRESH_MS;
                 }
@@ -133,9 +140,44 @@ public final class Main {
 
         File tmpDir = new File(root, ".tmp");
         tmpDir.mkdirs();
+        new File(root, ".control").delete(); // ignore commands meant for an earlier call
+        stoppedEarly = false;
         current = new Recording(kind, new File(tmpDir, System.currentTimeMillis() + ".m4a"));
         current.start();
+        notifyRecording();
         writeStatus();
+    }
+
+    /** Commands from the notification's buttons, written by the app to &lt;root&gt;/.control. */
+    private static void handleControl() {
+        File f = new File(root, ".control");
+        if (stoppedEarly || !f.exists()) {
+            return;
+        }
+        String cmd;
+        try {
+            cmd = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).trim();
+        } catch (Exception e) {
+            cmd = "";
+        }
+        f.delete();
+        if (cmd.equals("discard")) {
+            discard("discarded from the notification");
+        } else if (cmd.equals("stop")) {
+            // Finalize the audio now; the file is named and saved when the call ends.
+            current.stop();
+            stoppedEarly = true;
+            Log.i("stopped from the notification");
+            Notify.idle();
+            writeStatus();
+        }
+    }
+
+    private static void notifyRecording() {
+        Recording rec = current;
+        if (rec != null && !stoppedEarly) {
+            Notify.recording(appLabel(rec.kind), currentPeer != null ? currentPeer : currentNumber, rec.startedAt);
+        }
     }
 
     private static void skip(Recording.Kind kind, String reason) {
@@ -152,9 +194,12 @@ public final class Main {
     private static void refreshVoipInfo(AudioManager am) {
         if (currentPkg == null) {
             currentPkg = CallInfo.voipPackage(am);
-            if (currentPkg != null && !config.appEnabled(appLabel(Recording.Kind.VOIP))) {
-                discard(appLabel(Recording.Kind.VOIP) + " recording is off");
-                return;
+            if (currentPkg != null) {
+                if (!config.appEnabled(appLabel(Recording.Kind.VOIP))) {
+                    discard(appLabel(Recording.Kind.VOIP) + " recording is off");
+                    return;
+                }
+                notifyRecording();
             }
         }
         String peer = CallInfo.voipPeer(currentPkg);
@@ -165,6 +210,7 @@ public final class Main {
                 discard("contact is on the never-record list");
                 return;
             }
+            notifyRecording();
             writeStatus();
         }
     }
@@ -178,6 +224,7 @@ public final class Main {
         current = null;
         rec.stop();
         rec.file.delete();
+        Notify.idle();
         Log.i("discarded recording");
         skip(rec.kind, reason);
     }
@@ -188,6 +235,8 @@ public final class Main {
             return;
         }
         current = null;
+        stoppedEarly = false;
+        Notify.idle();
         long duration = rec.stop();
         Log.i("call ended: " + rec.kind + ", " + duration / 1000 + " s");
         writeStatus();
@@ -247,7 +296,7 @@ public final class Main {
             o.put("heartbeat", System.currentTimeMillis());
             Recording rec = current;
             if (rec != null) {
-                o.put("state", "recording");
+                o.put("state", stoppedEarly ? "stopped" : "recording");
                 o.put("app", appLabel(rec.kind));
                 o.put("since", rec.startedAt);
                 String peer = currentPeer != null ? currentPeer : currentNumber;

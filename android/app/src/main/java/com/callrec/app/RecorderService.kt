@@ -1,8 +1,6 @@
 package com.callrec.app
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -23,7 +21,6 @@ class RecorderService : Service() {
     companion object {
         private const val ACTION_START = "start"
         private const val ACTION_STOP = "stop"
-        private const val CHANNEL = "recorder"
 
         private val _active = MutableStateFlow<Active?>(null)
         val active: StateFlow<Active?> = _active
@@ -53,7 +50,7 @@ class RecorderService : Service() {
     }
 
     private fun begin() {
-        startForeground(1, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        startForeground(Notifications.ID_VOICE, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         val file = Store.newMemoFile()
         try {
             recorder = MediaRecorder(this).apply {
@@ -97,22 +94,12 @@ class RecorderService : Service() {
     }
 
     private fun notification(): Notification {
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Voice recorder", NotificationManager.IMPORTANCE_LOW))
         val stop = PendingIntent.getService(
             this, 0, Intent(this, RecorderService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE,
         )
-        val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+        return Notifications.ongoing(
+            this, "Voice recording", null, System.currentTimeMillis(),
+            listOf(Notifications.action(this, "Stop", stop)),
         )
-        return Notification.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Recording…")
-            .setUsesChronometer(true)
-            .setWhen(System.currentTimeMillis())
-            .setOngoing(true)
-            .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
-            .build()
     }
 }

@@ -14,7 +14,7 @@ public final class SelfTest {
     public static void main(String[] args) throws Exception {
         Env.init();
         if (args.length > 0 && args[0].equals("simcall")) {
-            simulateVoipCall();
+            simulateVoipCall(args.length > 1 ? Integer.parseInt(args[1]) : 6);
             System.exit(0);
         }
         audioInfo();
@@ -35,7 +35,7 @@ public final class SelfTest {
 
     private static AudioTrack tone() {
         int rate = Sources.SAMPLE_RATE;
-        short[] pcm = new short[rate * 6];
+        short[] pcm = new short[rate * 2];
         for (int i = 0; i < pcm.length; i++) {
             pcm[i] = (short) (12000 * Math.sin(2 * Math.PI * 1000 * i / rate));
         }
@@ -50,17 +50,18 @@ public final class SelfTest {
                 .setBufferSizeInBytes(pcm.length * 2)
                 .build();
         t.write(pcm, 0, pcm.length);
+        t.setLoopPoints(0, pcm.length, -1);
         return t;
     }
 
     /** Pretends to be a VoIP app for ~6 s so the running daemon records it end to end. */
-    private static void simulateVoipCall() throws InterruptedException {
+    private static void simulateVoipCall(int seconds) throws InterruptedException {
         AudioManager am = CallInfo.audioManager();
         am.setMode(AudioManager.MODE_IN_COMMUNICATION);
         AudioTrack tone = tone();
         tone.play();
         Log.i("simulated call: mode=" + am.getMode());
-        Thread.sleep(6000);
+        Thread.sleep(seconds * 1000L);
         tone.stop();
         tone.release();
         am.setMode(AudioManager.MODE_NORMAL);

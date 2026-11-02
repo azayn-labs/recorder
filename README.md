@@ -52,6 +52,10 @@ The **Call Recorder** app on the phone (`./callrec.sh app` builds, installs and 
   recording right now.
 - **Record button:** a microphone recorder (foreground service, so it keeps going with the
   screen off; stop from the app or the notification). Saves to `Recordings/`, then offers to rename.
+- **Live notification:** while a call is being recorded, an ongoing notification shows the
+  app, the contact and a running timer, with **Stop** (keep what's recorded so far and skip the
+  rest of the call) and **Discard** (delete it). It's an Android Live Update, so it also appears
+  as a status-bar chip and in Samsung's Now Bar. The voice recorder shows one too.
 - **Rename:** any recording can be renamed. This renames the file itself. The original date
   and time are kept and still shown.
 - **Settings tab:** recorder status, a master "Record calls" switch, per-app switches
@@ -62,6 +66,11 @@ The app and the daemon talk through two files in `/sdcard/CallRecorder`:
 
 - `.config.json`: written by the app, read by the daemon at the start of each call.
 - `.status.json`: the daemon's heartbeat, every 2 s.
+- `.control`: Stop/Discard from the notification (the daemon reads and deletes it).
+
+The daemon also sends an explicit broadcast to the app's `CallNotifier` receiver when a
+recording starts, updates or stops. The receiver requires `android.permission.DUMP`, which
+adb shell has and normal apps can't get, so other apps can't fake it.
 
 How the never-record list is enforced:
 

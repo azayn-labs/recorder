@@ -157,6 +157,11 @@ private fun StatusCard(status: Store.Status) {
                 if (status.since > 0) " · since ${Store.formatTime(status.since)}" else "",
             MaterialTheme.colorScheme.tertiaryContainer,
         )
+        status.state == "stopped" -> Triple(
+            "Recording stopped",
+            "Stopped from the notification. It's saved when the call ends.",
+            MaterialTheme.colorScheme.secondaryContainer,
+        )
         status.state == "skipping" -> Triple(
             "Not recording this call",
             status.reason ?: "",
