@@ -2,8 +2,12 @@ package com.callrec;
 
 import android.media.AudioManager;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -12,19 +16,28 @@ import java.util.Locale;
  * Call recorder daemon. Launched via adb as uid shell:
  *   CLASSPATH=/data/local/tmp/callrec.dex app_process / com.callrec.Main [outputDir]
  * Polls the audio mode and records every cellular (MODE_IN_CALL) and VoIP
- * (MODE_IN_COMMUNICATION) call to outputDir/&lt;App&gt;/&lt;date&gt;_&lt;peer&gt;.m4a.
+ * (MODE_IN_COMMUNICATION) call to outputDir/&lt;App&gt;/&lt;date&gt;_&lt;peer&gt;.m4a,
+ * honoring the companion app's .config.json and reporting to .status.json.
  */
 public final class Main {
+    public static final int VERSION = 2;
+
     private static final long POLL_MS = 500;
     private static final int START_POLLS = 2; // call mode must hold for 1 s before recording
     private static final int STOP_POLLS = 4; // and be gone for 2 s before stopping
     private static final long MIN_DURATION_MS = 2_000;
-    private static final long PEER_REFRESH_MS = 5_000;
+    private static final long PEER_REFRESH_MS = 3_000;
+    private static final long STATUS_MS = 2_000;
 
     private static File root;
+    private static Config config;
     private static Recording current;
     private static String currentPkg;
     private static String currentPeer;
+    private static String currentNumber;
+    /** Kind of a call we decided not to record; set until that call ends. */
+    private static Recording.Kind skipping;
+    private static String skipReason;
 
     private Main() {
     }
@@ -33,7 +46,7 @@ public final class Main {
         root = new File(args.length > 0 ? args[0] : "/sdcard/CallRecorder");
         Env.init();
         writePid();
-        Log.i("callrec started, pid " + android.os.Process.myPid() + ", saving to " + root);
+        Log.i("callrec v" + VERSION + " started, pid " + android.os.Process.myPid() + ", saving to " + root);
 
         Runtime.getRuntime().addShutdownHook(new Thread(Main::finish));
 
@@ -42,12 +55,20 @@ public final class Main {
         int pendingPolls = 0;
         int idlePolls = 0;
         long nextPeerCheck = 0;
+        long nextStatus = 0;
 
         while (true) {
-            int mode = am.getMode();
-            Recording.Kind kind = kindFor(mode);
+            Recording.Kind kind = kindFor(am.getMode());
 
-            if (current == null) {
+            if (skipping != null) {
+                if (kind == skipping) {
+                    idlePolls = 0;
+                } else if (++idlePolls >= STOP_POLLS) {
+                    Log.i("skipped call ended");
+                    skipping = null;
+                    skipReason = null;
+                }
+            } else if (current == null) {
                 if (kind != null && kind == pending) {
                     if (++pendingPolls >= START_POLLS) {
                         begin(am, kind);
@@ -70,6 +91,11 @@ public final class Main {
                 finish();
             }
 
+            long now = System.currentTimeMillis();
+            if (now >= nextStatus) {
+                writeStatus();
+                nextStatus = now + STATUS_MS;
+            }
             Thread.sleep(POLL_MS);
         }
     }
@@ -85,25 +111,75 @@ public final class Main {
     }
 
     private static void begin(AudioManager am, Recording.Kind kind) {
-        File tmpDir = new File(root, ".tmp");
-        tmpDir.mkdirs();
-        File tmp = new File(tmpDir, System.currentTimeMillis() + ".m4a");
+        config = Config.load(root);
         currentPkg = kind == Recording.Kind.VOIP ? CallInfo.voipPackage(am) : null;
         currentPeer = null;
-        Log.i("call started: " + kind + (currentPkg != null ? " (" + currentPkg + ")" : ""));
-        current = new Recording(kind, tmp);
+        currentNumber = kind == Recording.Kind.CELLULAR ? CallInfo.incomingNumber() : null;
+        String app = appLabel(kind);
+        Log.i("call started: " + kind + " " + app + (currentNumber != null ? " " + currentNumber : ""));
+
+        if (!config.enabled) {
+            skip(kind, "recording is paused");
+            return;
+        }
+        if ((kind == Recording.Kind.CELLULAR || currentPkg != null) && !config.appEnabled(app)) {
+            skip(kind, app + " recording is off");
+            return;
+        }
+        if (config.excluded(null, currentNumber)) {
+            skip(kind, "number is on the never-record list");
+            return;
+        }
+
+        File tmpDir = new File(root, ".tmp");
+        tmpDir.mkdirs();
+        current = new Recording(kind, new File(tmpDir, System.currentTimeMillis() + ".m4a"));
         current.start();
+        writeStatus();
+    }
+
+    private static void skip(Recording.Kind kind, String reason) {
+        Log.i("not recording: " + reason);
+        skipping = kind;
+        skipReason = reason;
+        writeStatus();
+    }
+
+    private static String appLabel(Recording.Kind kind) {
+        return kind == Recording.Kind.CELLULAR ? "Phone" : CallInfo.label(currentPkg);
     }
 
     private static void refreshVoipInfo(AudioManager am) {
         if (currentPkg == null) {
             currentPkg = CallInfo.voipPackage(am);
+            if (currentPkg != null && !config.appEnabled(appLabel(Recording.Kind.VOIP))) {
+                discard(appLabel(Recording.Kind.VOIP) + " recording is off");
+                return;
+            }
         }
         String peer = CallInfo.voipPeer(currentPkg);
         if (peer != null && !peer.equals(currentPeer)) {
             currentPeer = peer;
             Log.i("peer: " + peer);
+            if (config.excluded(peer, null)) {
+                discard("contact is on the never-record list");
+                return;
+            }
+            writeStatus();
         }
+    }
+
+    /** Stops the current recording and deletes it, ignoring the rest of the call. */
+    private static synchronized void discard(String reason) {
+        Recording rec = current;
+        if (rec == null) {
+            return;
+        }
+        current = null;
+        rec.stop();
+        rec.file.delete();
+        Log.i("discarded recording");
+        skip(rec.kind, reason);
     }
 
     private static synchronized void finish() {
@@ -114,18 +190,29 @@ public final class Main {
         current = null;
         long duration = rec.stop();
         Log.i("call ended: " + rec.kind + ", " + duration / 1000 + " s");
+        writeStatus();
         if (duration < MIN_DURATION_MS) {
             rec.file.delete();
             return;
         }
 
-        String app;
+        String app = appLabel(rec.kind);
         String peer;
         if (rec.kind == Recording.Kind.CELLULAR) {
-            app = "Phone";
-            peer = CallInfo.cellularPeer(rec.startedAt);
+            CallInfo.Peer p = CallInfo.cellularPeer(rec.startedAt);
+            if (config.excluded(p.name, p.number != null ? p.number : currentNumber)) {
+                rec.file.delete();
+                Log.i("deleted: contact is on the never-record list");
+                return;
+            }
+            peer = p.display();
         } else {
-            app = CallInfo.label(currentPkg);
+            // Unknown apps were recorded provisionally; now the "Other" switch applies.
+            if (!config.appEnabled(app)) {
+                rec.file.delete();
+                Log.i("deleted: " + app + " recording is off");
+                return;
+            }
             peer = currentPeer;
         }
 
@@ -142,8 +229,39 @@ public final class Main {
     }
 
     private static String sanitize(String s) {
-        String r = s.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").trim().replace(' ', '_');
-        return r.length() > 60 ? r.substring(0, 60) : r;
+        String r = s.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").replaceAll("\\s+", " ").trim();
+        return r.length() > 80 ? r.substring(0, 80) : r;
+    }
+
+    /** Heartbeat for the companion app: .status.json, rewritten atomically every few seconds. */
+    private static synchronized void writeStatus() {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("version", VERSION);
+            o.put("pid", android.os.Process.myPid());
+            o.put("heartbeat", System.currentTimeMillis());
+            Recording rec = current;
+            if (rec != null) {
+                o.put("state", "recording");
+                o.put("app", appLabel(rec.kind));
+                o.put("since", rec.startedAt);
+                String peer = currentPeer != null ? currentPeer : currentNumber;
+                if (peer != null) {
+                    o.put("peer", peer);
+                }
+            } else if (skipping != null) {
+                o.put("state", "skipping");
+                o.put("reason", skipReason);
+            } else {
+                o.put("state", "idle");
+            }
+            root.mkdirs();
+            File tmp = new File(root, ".status.json.tmp");
+            Files.write(tmp.toPath(), o.toString().getBytes(StandardCharsets.UTF_8));
+            tmp.renameTo(new File(root, ".status.json"));
+        } catch (Exception e) {
+            Log.e("could not write status", e);
+        }
     }
 
     private static void writePid() {

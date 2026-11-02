@@ -139,18 +139,53 @@ public final class CallInfo {
         return fallback;
     }
 
-    /** Number/name of the most recent cellular call started at or after {@code sinceMs}. */
-    public static String cellularPeer(long sinceMs) {
+    /** The other party of a call. Either field may be null. */
+    public static final class Peer {
+        public final String name;
+        public final String number;
+
+        Peer(String name, String number) {
+            this.name = name;
+            this.number = number;
+        }
+
+        /** "Name (number)", "Name" or "number"; null if nothing is known. */
+        public String display() {
+            if (name != null && number != null) {
+                return name + " (" + number + ")";
+            }
+            return name != null ? name : number;
+        }
+    }
+
+    /** Number of a ringing/active incoming cellular call, or null (outgoing calls don't expose it). */
+    public static String incomingNumber() {
+        String out = exec("dumpsys", "telephony.registry");
+        if (out == null) {
+            return null;
+        }
+        for (String line : out.split("\n")) {
+            String t = line.trim();
+            if (t.startsWith("mCallIncomingNumber=")) {
+                String n = t.substring("mCallIncomingNumber=".length()).trim();
+                if (!n.isEmpty()) {
+                    return n;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Name/number of the most recent cellular call started at or after {@code sinceMs}. */
+    public static Peer cellularPeer(long sinceMs) {
         for (int attempt = 0; attempt < 6; attempt++) {
             String out = exec("content", "query", "--uri", "content://call_log/calls",
                     "--projection", "number:name:date",
                     "--where", "date>=" + (sinceMs - 120_000));
             if (out != null) {
-                String best = null;
+                Peer best = null;
                 long bestDate = -1;
                 for (String line : out.split("\n")) {
-                    String number = field(line, "number");
-                    String name = field(line, "name");
                     String date = field(line, "date");
                     if (date == null) {
                         continue;
@@ -163,9 +198,7 @@ public final class CallInfo {
                     }
                     if (d > bestDate) {
                         bestDate = d;
-                        String n = (name != null && !name.equals("NULL")) ? name : null;
-                        String num = (number != null && !number.equals("NULL") && !number.isEmpty()) ? number : null;
-                        best = n != null && num != null ? n + " " + num : n != null ? n : num;
+                        best = new Peer(nullIfEmpty(field(line, "name")), nullIfEmpty(field(line, "number")));
                     }
                 }
                 if (best != null) {
@@ -177,7 +210,11 @@ public final class CallInfo {
             } catch (InterruptedException ignored) {
             }
         }
-        return null;
+        return new Peer(null, null);
+    }
+
+    private static String nullIfEmpty(String s) {
+        return s == null || s.isEmpty() || s.equals("NULL") ? null : s;
     }
 
     private static String field(String row, String key) {

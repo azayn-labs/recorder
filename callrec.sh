@@ -6,6 +6,7 @@
 #   ./callrec.sh stop      stop the daemon (finalizes an in-progress recording)
 #   ./callrec.sh selftest  check which capture sources work on this phone
 #   ./callrec.sh selftest simcall   fake a 6 s VoIP call (daemon should save a file)
+#   ./callrec.sh app       build and install the companion app (recordings + settings)
 #   ./callrec.sh status    is it running? + last log lines
 #   ./callrec.sh log       follow the daemon log
 #   ./callrec.sh pull [dir]  copy recordings to this computer (default ./recordings)
@@ -17,6 +18,7 @@ PLATFORM="$(ls -d "$SDK"/platforms/android-* | sort -V | tail -1)"
 BUILD_TOOLS="$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)"
 ADB="adb${ANDROID_SERIAL:+ -s $ANDROID_SERIAL}"
 JAVAC="$(command -v javac || ls /opt/android-studio/jbr/bin/javac "$HOME"/.local/share/jdk/*/bin/javac "$HOME"/.gradle/jdks/*/bin/javac 2>/dev/null | head -1)"
+APP_ID=com.callrec.app
 
 DEX_REMOTE=/data/local/tmp/callrec.dex
 LOG_REMOTE=/data/local/tmp/callrec.log
@@ -72,9 +74,19 @@ status() {
     $ADB shell "tail -n 15 $LOG_REMOTE 2>/dev/null" || true
 }
 
+app() {
+    # Gradle needs a full JDK; reuse the one javac came from.
+    (cd android && JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVAC")")")" ./gradlew -q assembleDebug)
+    $ADB install -r android/app/build/outputs/apk/debug/app-debug.apk
+    $ADB shell appops set "$APP_ID" MANAGE_EXTERNAL_STORAGE allow
+    $ADB shell pm grant "$APP_ID" android.permission.READ_CONTACTS
+    $ADB shell am start -n "$APP_ID/.MainActivity" >/dev/null
+}
+
 case "${1:-}" in
     build) build ;;
     start) start ;;
+    app) app ;;
     stop) stop ;;
     status) status ;;
     selftest)
@@ -88,5 +100,5 @@ case "${1:-}" in
         mkdir -p "$dest"
         $ADB pull "$OUT_REMOTE/." "$dest"
         ;;
-    *) sed -n '2,12p' "$0"; exit 1 ;;
+    *) sed -n '2,13p' "$0"; exit 1 ;;
 esac

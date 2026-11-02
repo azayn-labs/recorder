@@ -37,10 +37,35 @@ Names come from the call log for cellular calls, and from the app's ongoing-call
 notification title for VoIP calls. They're best effort. Recordings under 2 s are dropped.
 You can browse them in *My Files › Internal storage › CallRecorder*.
 
+## Companion app (`android/`)
+
+The **Call Recorder** app on the phone (`./callrec.sh app` builds, installs and grants its permissions):
+
+- **Recordings tab:** recordings grouped by day, filter by app, search by name or number,
+  built-in player (seek, ±10 s), share, delete, and "Never record this person" from a row's menu.
+  A banner shows when the recorder is not running or is recording right now.
+- **Settings tab:** recorder status, a master "Record calls" switch, per-app switches
+  (Phone, WhatsApp, Instagram, Facebook, Messenger, other apps), and the **Never record**
+  list. Add people from your contacts (all their numbers) or by name/username.
+
+The app and the daemon talk through two files in `/sdcard/CallRecorder`:
+
+- `.config.json`: written by the app, read by the daemon at the start of each call.
+- `.status.json`: the daemon's heartbeat, every 2 s.
+
+How the never-record list is enforced:
+
+| Call | Matched by | When |
+|---|---|---|
+| Incoming phone call | number | before recording starts, so it's never recorded |
+| Outgoing phone call | number/name from the call log | after hang-up; the file is deleted right away (Android doesn't expose the dialed number during the call) |
+| WhatsApp / Instagram / Facebook | name or username shown in the app's call notification | a few seconds into the call; the partial recording is discarded |
+
 ## Usage
 
 ```
 ./callrec.sh start      # build, push, (re)start. Run it again after every phone reboot
+./callrec.sh app        # build + install the companion app
 ./callrec.sh status     # running? + recent log
 ./callrec.sh log        # follow log (shows each source's peak level during a call)
 ./callrec.sh selftest   # check which capture sources work on this firmware
@@ -48,7 +73,8 @@ You can browse them in *My Files › Internal storage › CallRecorder*.
 ./callrec.sh stop
 ```
 
-Building needs the Android SDK (`$ANDROID_HOME`, platform + build-tools) and any JDK 17+.
+Building needs the Android SDK (`$ANDROID_HOME`, platform + build-tools) and a JDK 17+
+(Android Studio's bundled one is found automatically).
 
 ## Limitations
 
