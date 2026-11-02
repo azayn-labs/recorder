@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launcher icon background: the logo tile's navy-to-purple gradient (top-left to bottom-right). -->
+<!-- Launcher icon background: plain white, like the other Azayn apps. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient
-        android:angle="315"
-        android:startColor="#0D3268"
-        android:centerColor="#060F35"
-        android:endColor="#1A0845" />
+    <solid android:color="#FFFFFF" />
 </shape>
