@@ -67,12 +67,14 @@ object Store {
 
     private fun audioFiles(dir: File) = dir.listFiles { f -> f.isFile && f.name.endsWith(".m4a") }.orEmpty().toList()
 
+    fun memo(file: File) = recording(file, MEMOS, null)
+
     private fun recording(file: File, app: String, contact: String?): Recording {
         val name = file.nameWithoutExtension
         val time = if (STAMP.matches(name)) {
             runCatching { stampFormat.parse(name.take(19))!!.time }.getOrNull()
         } else null
-        // Renaming keeps the file's modification time, so renamed files still sort by when they were made.
+        // Renamed files carry their start time as mtime (see rename()).
         return Recording(file, app, contact, time ?: file.lastModified())
     }
 
@@ -86,6 +88,8 @@ object Store {
         val dest = File(rec.file.parentFile, "$clean.m4a")
         if (dest == rec.file) return rec
         if (dest.exists() || !rec.file.renameTo(dest)) return null
+        // Once the timestamp is gone from the name, the file's mtime is the recording's date; make it the start time.
+        dest.setLastModified(rec.time)
         durations.remove(rec.file.path)
         return rec.copy(file = dest)
     }

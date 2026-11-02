@@ -132,7 +132,7 @@ fun RecordingsScreen(
             onChanged()
             val result = snackbar.showSnackbar("Recording saved", actionLabel = "Rename", duration = SnackbarDuration.Long)
             if (result == SnackbarResult.ActionPerformed) {
-                renaming = Store.Recording(file, Store.MEMOS, null, System.currentTimeMillis())
+                renaming = Store.memo(file)
             }
         }
     }
