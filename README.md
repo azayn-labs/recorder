@@ -16,16 +16,19 @@ Automatic call recorder for Android 12 and later, built and tested on a Samsung 
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/01-recordings.png" width="24%" alt="Every call, sorted by app and contact">
-  <img src="docs/screenshots/02-contact.png" width="24%" alt="Rename what matters">
-  <img src="docs/screenshots/03-player.png" width="24%" alt="Built-in player">
-  <img src="docs/screenshots/04-voice-recorder.png" width="24%" alt="One-tap voice recorder">
+  <img src="docs/screenshots/01-recordings.png" width="32%" alt="Every call, sorted by app and contact">
+  <img src="docs/screenshots/02-contact.png" width="32%" alt="Rename what matters">
+  <img src="docs/screenshots/03-player.png" width="32%" alt="Built-in player">
 </p>
 <p align="center">
-  <img src="docs/screenshots/05-notification.png" width="24%" alt="Live notification while recording">
-  <img src="docs/screenshots/06-settings.png" width="24%" alt="Your rules: per-app switches and audio format">
-  <img src="docs/screenshots/07-never-record.png" width="24%" alt="Never record some people">
-  <img src="docs/screenshots/08-light-dark.png" width="24%" alt="Light and dark themes">
+  <img src="docs/screenshots/04-voice-recorder.png" width="32%" alt="One-tap voice recorder">
+  <img src="docs/screenshots/05-notification.png" width="32%" alt="Live notification while recording">
+  <img src="docs/screenshots/09-setup.png" width="32%" alt="No computer, no root: two-minute setup">
+</p>
+<p align="center">
+  <img src="docs/screenshots/06-settings.png" width="32%" alt="Your rules: recorder controls and per-app switches">
+  <img src="docs/screenshots/07-never-record.png" width="32%" alt="Never record some people">
+  <img src="docs/screenshots/08-light-dark.png" width="32%" alt="Light and dark themes">
 </p>
 
 <sub>Screenshots use fictional names and numbers. They're rebuilt from on-device captures with

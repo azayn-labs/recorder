@@ -138,7 +138,8 @@ def card(title, caption, shots, name, w=1000, h=1700):
         for i, p in enumerate(ps):
             img.alpha_composite(p, (x, y - round(420 * 0.08) + i * 60))
             x += p.width + gap
-    img.convert("RGB").save(OUT / name, optimize=True)
+    if name:
+        img.convert("RGB").save(OUT / name, optimize=True)
     return img
 
 
@@ -170,6 +171,25 @@ def notification_card(shade, name, w=1000, h=1700):
     img.convert("RGB").save(OUT / name, optimize=True)
 
 
+def setup_card(shot, shade, name, w=1000, h=1700):
+    """The on-phone setup screen, with the pairing-code notification floating over it."""
+    img = card("No computer, no root",
+               "A two-minute setup pairs the app with your phone's own Wireless debugging. "
+               "Type the code right in the notification.", [shot], None, w, h)
+    crop = shade.convert("RGB").crop((39, 296, 1041, 578))
+    cw = w - 140
+    crop = crop.resize((cw, round(crop.height * cw / crop.width)), Image.LANCZOS)
+    r = round(crop.height * 0.22)
+    mask = Image.new("L", crop.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, crop.width, crop.height], radius=r, fill=255)
+    y = h - crop.height - 120
+    sh = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle([70, y + 18, 70 + crop.width, y + 18 + crop.height], radius=r, fill=(20, 24, 60, 110))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(24)))
+    img.paste(crop, (70, y), mask)
+    img.convert("RGB").save(OUT / name, optimize=True)
+
+
 def hero(shots, name, w=2000, h=1100):
     img = ground(w, h).convert("RGBA")
     d = ImageDraw.Draw(img)
@@ -181,9 +201,9 @@ def hero(shots, name, w=2000, h=1100):
     d.text((x0, 455), "Every call on your phone, recorded automatically.", font=font(34, "Medium"), fill=TEXT2)
     bullets = [
         "Phone, WhatsApp, Instagram and Facebook calls",
+        "No computer or root: two-minute setup",
         "Sorted by app and contact, renamable",
-        "Built-in player and voice recorder",
-        "Live notification, Never-record list",
+        "Player, voice recorder, live notification",
         "Light and dark, no ads, open source",
     ]
     y = 560
@@ -201,7 +221,8 @@ def hero(shots, name, w=2000, h=1100):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    s = {p.stem: clean_status_bar(Image.open(p)) for p in RAW.glob("*.png") if p.stem != "05-notification-shade"}
+    shades = {"05-notification-shade", "12-pairing-notification"}
+    s = {p.stem: clean_status_bar(Image.open(p)) for p in RAW.glob("*.png") if p.stem not in shades}
     hero([s["01-recordings"], s["02-contact"], s["10-recordings-dark"]], "hero.png")
     card("Every call, sorted by app and contact",
          "Phone, WhatsApp, Instagram and Facebook calls land in one list, grouped by who you talked to.",
@@ -216,8 +237,9 @@ def main():
          "The Record button sits in the middle of the bar. It keeps recording with the screen off.",
          [s["04-voice-recording"]], "04-voice-recorder.png")
     notification_card(Image.open(RAW / "05-notification-shade.png"), "05-notification.png")
+    setup_card(s["09-setup"], Image.open(RAW / "12-pairing-notification.png"), "09-setup.png")
     card("Your rules",
-         "Pause everything, turn recording off per app, and choose M4A or Opus.",
+         "Restart the recorder or let it start after a reboot, pause everything, or turn recording off per app.",
          [s["06-settings-top"]], "06-settings.png")
     card("Never record some people",
          "Pick contacts or type a name or username. Their calls are skipped.",
