@@ -31,6 +31,22 @@ It records:
 <sub>Screenshots use fictional names and numbers. They're rebuilt from on-device captures with
 `docs/screenshots/make.py`.</sub>
 
+## Install
+
+1. Turn on **USB debugging** on the phone and connect it to a computer that has `adb`.
+2. From the [latest release](https://github.com/azayn-labs/recorder/releases/latest), download
+   `AzaynRecorder-vX.Y.Z.apk`, `callrec.dex` and `callrec.sh` into one folder.
+3. Run:
+
+   ```bash
+   chmod +x callrec.sh
+   ./callrec.sh app     # install the app and grant its permissions
+   ./callrec.sh start   # start the recorder; it keeps running after you unplug
+   ```
+
+Run `./callrec.sh start` again after every phone restart. To build from source instead, see
+[Usage](#usage); maintainers publishing a version, see [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## How it works
 
 Normal Android apps can't capture call audio. The `shell` user that adb runs as can,

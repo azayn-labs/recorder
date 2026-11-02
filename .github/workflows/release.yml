@@ -1,0 +1,93 @@
+name: Release
+
+# Push a tag like v1.1.0 to build a signed APK and publish a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Signing secrets live in this environment, not at repository level.
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-37.0 build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The signing key lives only in the "release" environment's secrets.
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RECORDER_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret RECORDER_KEYSTORE_BASE64 is not set in the release environment (see docs/RELEASING.md)"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          RECORDER_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          RECORDER_KEYSTORE_PASSWORD: ${{ secrets.RECORDER_KEYSTORE_PASSWORD }}
+          RECORDER_KEY_ALIAS: ${{ secrets.RECORDER_KEY_ALIAS }}
+          RECORDER_KEY_PASSWORD: ${{ secrets.RECORDER_KEY_PASSWORD }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # versionCode from the version: 1.2.3 -> 10203 (always increasing).
+          IFS=. read -r MAJOR MINOR PATCH <<< "${VERSION%%-*}"
+          export RECORDER_VERSION_NAME="$VERSION"
+          export RECORDER_VERSION_CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
+          ./gradlew assembleRelease
+          mv app/build/outputs/apk/release/app-release.apk "../AzaynRecorder-$GITHUB_REF_NAME.apk"
+
+      # The app only manages recordings; the recorder itself runs as the adb shell user. Ship it
+      # prebuilt, with the script that starts it (it uses callrec.dex from the same folder).
+      - name: Build the recorder daemon
+        run: |
+          ./callrec.sh build
+          cp build/callrec.dex callrec.dex
+          sha256sum "AzaynRecorder-$GITHUB_REF_NAME.apk" callrec.dex callrec.sh > SHA256SUMS
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          ### Install
+
+          You need a computer with \`adb\` and the phone connected with USB debugging on.
+          Download **AzaynRecorder-$GITHUB_REF_NAME.apk**, **callrec.dex** and **callrec.sh** into one folder, then:
+
+          \`\`\`bash
+          chmod +x callrec.sh
+          ./callrec.sh app     # install the app and grant its permissions
+          ./callrec.sh start   # start the recorder (run again after every phone restart)
+          \`\`\`
+
+          Recording calls may be illegal without everyone's consent where you or the other person are.
+          See the [legal notice](https://github.com/$GITHUB_REPOSITORY#legal-notice-and-disclaimer).
+          NOTES
+          gh release create "$GITHUB_REF_NAME" \
+            "AzaynRecorder-$GITHUB_REF_NAME.apk" callrec.dex callrec.sh SHA256SUMS \
+            --title "Azayn Recorder $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --generate-notes \
+            $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
