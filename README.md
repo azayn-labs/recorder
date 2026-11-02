@@ -8,8 +8,9 @@ It records:
 - regular phone calls (SIM / cellular)
 - WhatsApp, Instagram and Facebook/Messenger calls (and any other VoIP app)
 
-> **Before you use it:** recording calls is restricted or illegal in many places unless everyone on
-> the call agrees. You are solely responsible for using this software lawfully. Read the
+> **Before you use it:** this is for recording your own calls on your own phone. Recording calls is
+> restricted or illegal in many places unless everyone on the call agrees, and you are solely
+> responsible for using this software lawfully. Read the
 > [legal notice and disclaimer](#legal-notice-and-disclaimer).
 
 ## Screenshots
@@ -146,6 +147,13 @@ Azayn Recorder is free and open source. If it's useful to you and you'd like to 
 [buy me a coffee on Ko-fi](https://ko-fi.com/azayn). A star on GitHub helps too.
 
 ## Legal notice and disclaimer
+
+**Intended use.** Azayn Recorder is designed for individuals to record their own calls on a phone
+they own, for personal reference. It is not designed or intended for monitoring other people's
+devices, covert surveillance, workplace or employee monitoring, or providing call-recording
+services to others. Do not install it on a device you don't own or aren't authorised to configure.
+This statement describes the intended purpose and does not change the terms of the Apache
+License 2.0.
 
 **Your responsibility for lawful use.** Laws on recording telephone and internet calls differ
 between countries, states and regions. Many require the consent of every person on the call, or
