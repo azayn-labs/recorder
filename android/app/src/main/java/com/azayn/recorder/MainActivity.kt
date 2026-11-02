@@ -163,44 +163,55 @@ private fun RecorderApp() {
         bottomBar = {
             val recording = active != null
             val selecting = selected.isNotEmpty() && tab == 0
-            NotchedNavBar(
-                tabs = listOf(Icons.Outlined.GraphicEq to "Recordings", Icons.Outlined.Settings to "Settings"),
-                selected = tab,
-                onSelect = { tab = it; selected = emptySet() },
-                centerIcon = when {
-                    selecting -> Icons.Default.Delete
-                    recording -> Icons.Default.Stop
-                    else -> Icons.Default.Mic
-                },
-                centerLabel = when {
-                    selecting -> "Delete ${selected.size}"
-                    recording -> Store.formatDuration(elapsed)
-                    else -> "Record"
-                },
-                centerLabelColor = if (selecting || recording) az.error else az.textTertiary,
-                centerDescription = when {
-                    selecting -> "Delete ${selected.size} selected"
-                    recording -> "Stop recording"
-                    else -> "Record a voice note"
-                },
-                centerColors = if (selecting || recording) listOf(Color(0xFFFF6B7D), Color(0xFFE11D48)) else listOf(Color(0xFF2F9BFF), Color(0xFF4F46E5)),
-                centerScale = if (recording && !selecting) 1.18f else 1f,
-                centerGlow = if (recording && !selecting) Color(0xFFFF4D6A) else null,
-                onCenter = {
-                    when {
-                        selecting -> confirmDelete = true
-                        recording -> RecorderService.stop(ctx)
-                        else -> {
-                            tab = 0 // the saved recording (and its Rename prompt) shows on Recordings
-                            micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+            // Content scrolls behind the bar; a soft fade keeps it from clashing with the bar's labels.
+            Box {
+                Box(
+                    Modifier.matchParentSize().background(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.45f to az.background.copy(alpha = 0.7f), 1f to az.background.copy(alpha = 0.95f)),
+                    ),
+                )
+                NotchedNavBar(
+                    tabs = listOf(Icons.Outlined.GraphicEq to "Recordings", Icons.Outlined.Settings to "Settings"),
+                    selected = tab,
+                    onSelect = { tab = it; selected = emptySet() },
+                    centerIcon = when {
+                        selecting -> Icons.Default.Delete
+                        recording -> Icons.Default.Stop
+                        else -> Icons.Default.Mic
+                    },
+                    centerLabel = when {
+                        selecting -> "Delete ${selected.size}"
+                        recording -> Store.formatDuration(elapsed)
+                        else -> "Record"
+                    },
+                    centerLabelColor = if (selecting || recording) az.error else az.textTertiary,
+                    centerDescription = when {
+                        selecting -> "Delete ${selected.size} selected"
+                        recording -> "Stop recording"
+                        else -> "Record a voice note"
+                    },
+                    centerColors = if (selecting || recording) listOf(Color(0xFFFF6B7D), Color(0xFFE11D48)) else listOf(Color(0xFF2F9BFF), Color(0xFF4F46E5)),
+                    centerScale = if (recording && !selecting) 1.18f else 1f,
+                    centerGlow = if (recording && !selecting) Color(0xFFFF4D6A) else null,
+                    onCenter = {
+                        when {
+                            selecting -> confirmDelete = true
+                            recording -> RecorderService.stop(ctx)
+                            else -> {
+                                tab = 0 // the saved recording (and its Rename prompt) shows on Recordings
+                                micPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+                            }
                         }
-                    }
-                },
-                modifier = Modifier.navigationBarsPadding(),
-            )
+                    },
+                    modifier = Modifier.navigationBarsPadding(),
+                )
+            }
         },
     ) { padding ->
-        val mod = Modifier.padding(padding)
+        // Only the top inset is applied: lists draw behind the bottom bar and pad their own end by
+        // its height, so the last item can scroll clear of it instead of being cut off.
+        val mod = Modifier.padding(top = padding.calculateTopPadding())
+        val bottomInset = padding.calculateBottomPadding()
         when (tab) {
             0 -> RecordingsScreen(
                 recordings = recordings,
@@ -214,9 +225,10 @@ private fun RecorderApp() {
                 },
                 selected = selected,
                 onSelect = { selected = it },
+                bottomInset = bottomInset,
                 modifier = mod,
             )
-            else -> SettingsScreen(status = status, config = config, onChange = ::updateConfig, onSetup = { setupOpen = true }, modifier = mod)
+            else -> SettingsScreen(status = status, config = config, onChange = ::updateConfig, onSetup = { setupOpen = true }, bottomInset = bottomInset, modifier = mod)
         }
     }
 

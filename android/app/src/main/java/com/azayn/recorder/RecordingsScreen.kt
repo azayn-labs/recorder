@@ -99,6 +99,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
@@ -130,6 +131,8 @@ fun RecordingsScreen(
     /** Multi-select: paths of the selected recordings. Long-press starts it; the app's centre button deletes. */
     selected: Set<String>,
     onSelect: (Set<String>) -> Unit,
+    /** Height of the app's bottom bar, which this screen draws behind. */
+    bottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
@@ -170,16 +173,17 @@ fun RecordingsScreen(
         modifier = modifier,
         contentWindowInsets = WindowInsets(0),
         containerColor = Color.Transparent,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.padding(bottom = bottomInset)) },
     ) { inner ->
         val group = openGroup
         if (group == null) {
-            GroupList(visible, status, onSetup, sel, onOpen = { openGroup = it }, onPlay = { playing = it }, Modifier.padding(inner))
+            GroupList(visible, status, onSetup, sel, bottomInset, onOpen = { openGroup = it }, onPlay = { playing = it }, Modifier.padding(inner))
         } else {
             GroupDetail(
                 group,
                 visible.filter { it.group == group },
                 sel,
+                bottomInset,
                 onBack = { openGroup = null; onSelect(emptySet()) },
                 onPlay = { playing = it },
                 onRename = { renaming = it },
@@ -238,6 +242,7 @@ private fun GroupList(
     status: Store.Status,
     onSetup: () -> Unit,
     sel: Selection,
+    bottomInset: Dp,
     onOpen: (Store.Group) -> Unit,
     onPlay: (Store.Recording) -> Unit,
     modifier: Modifier,
@@ -276,13 +281,13 @@ private fun GroupList(
 
         if (groups.isEmpty() && namedMatches.isEmpty()) {
             EmptyState(if (recordings.isEmpty()) "No recordings yet" else "Nothing matches",
-                if (recordings.isEmpty()) "Calls are saved here automatically. Tap Record for a voice note." else null)
+                if (recordings.isEmpty()) "Calls are saved here automatically. Tap Record for a voice note." else null, bottomInset)
             return@Column
         }
 
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomInset + 24.dp),
         ) {
             if (namedMatches.isNotEmpty()) {
                 item { SectionLabel("Named recordings") }
@@ -348,9 +353,9 @@ private fun SearchField(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun EmptyState(title: String, detail: String?) {
+private fun EmptyState(title: String, detail: String?, bottomInset: Dp = 0.dp) {
     Column(
-        Modifier.fillMaxSize().padding(32.dp),
+        Modifier.fillMaxSize().padding(bottom = bottomInset).padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -367,6 +372,7 @@ private fun GroupDetail(
     group: Store.Group,
     recs: List<Store.Recording>,
     sel: Selection,
+    bottomInset: Dp,
     onBack: () -> Unit,
     onPlay: (Store.Recording) -> Unit,
     onRename: (Store.Recording) -> Unit,
@@ -396,12 +402,12 @@ private fun GroupDetail(
             }
         }
         if (recs.isEmpty()) {
-            EmptyState("No recordings left", null)
+            EmptyState("No recordings left", null, bottomInset)
             return@Column
         }
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomInset + 24.dp),
         ) {
             recs.groupBy { dayLabel(ctx, it.time) }.forEach { (day, dayRecs) ->
                 item(key = "h-$day") { SectionLabel(day) }

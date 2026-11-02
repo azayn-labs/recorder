@@ -66,6 +66,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
@@ -78,6 +79,7 @@ fun SettingsScreen(
     config: Store.Config,
     onChange: (Store.Config) -> Unit,
     onSetup: () -> Unit,
+    bottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val recorder by RecorderControl.prefs.collectAsState()
@@ -98,7 +100,7 @@ fun SettingsScreen(
 
     LazyColumn(
         modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomInset + 24.dp),
     ) {
         item { ScreenTitle("Settings", inset = 4.dp) }
         item { StatusCard(status) }
