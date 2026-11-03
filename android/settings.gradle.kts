@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AzaynRecorder"
 include(":app")
+include(":voiptest")

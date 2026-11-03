@@ -52,11 +52,24 @@ public final class Sources {
 
     /** Direct capture from a MediaRecorder.AudioSource (VOICE_CALL, MIC, ...). */
     public static Capture direct(String name, int source) {
+        return direct(name, source, null);
+    }
+
+    /**
+     * @param privacySensitive null for the source's default. VOICE_COMMUNICATION is privacy-sensitive by
+     *     default, and of two privacy-sensitive captures Android silences the older one, so our mic
+     *     capture would mute the VoIP app's (the other person stops hearing you). Pass false for the
+     *     mic during VoIP calls: the app keeps its mic, and we may still capture (CAPTURE_AUDIO_OUTPUT).
+     */
+    public static Capture direct(String name, int source, Boolean privacySensitive) {
         try {
             AudioRecord.Builder b = new AudioRecord.Builder()
                     .setContext(Env.context())
                     .setAudioSource(source)
                     .setAudioFormat(format());
+            if (privacySensitive != null) {
+                b.setPrivacySensitive(privacySensitive);
+            }
             int min = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, ENCODING);
             if (min > 0) {
                 b.setBufferSizeInBytes(8 * min);
@@ -93,10 +106,11 @@ public final class Sources {
         return direct("downlink", MediaRecorder.AudioSource.VOICE_DOWNLINK);
     }
 
+    /** Your side of a VoIP call, without taking the mic away from the calling app (see above). */
     public static Capture mic() {
-        Capture c = direct("mic_voice_comm", MediaRecorder.AudioSource.VOICE_COMMUNICATION);
+        Capture c = direct("mic_voice_comm", MediaRecorder.AudioSource.VOICE_COMMUNICATION, false);
         if (c == null) {
-            c = direct("mic", MediaRecorder.AudioSource.MIC);
+            c = direct("mic", MediaRecorder.AudioSource.MIC, false);
         }
         return c;
     }

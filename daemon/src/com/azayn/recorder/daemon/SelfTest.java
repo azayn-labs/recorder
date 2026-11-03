@@ -13,6 +13,10 @@ public final class SelfTest {
 
     public static void main(String[] args) throws Exception {
         Env.init();
+        if (args.length > 1 && args[0].equals("probe")) {
+            probe(args[1], args.length > 2 ? Integer.parseInt(args[2]) : 8);
+            System.exit(0);
+        }
         if (args.length > 0 && args[0].equals("simcall")) {
             simulateVoipCall(args.length > 1 ? Integer.parseInt(args[1]) : 6);
             System.exit(0);
@@ -66,6 +70,43 @@ public final class SelfTest {
         tone.release();
         am.setMode(AudioManager.MODE_NORMAL);
         Log.i("simulated call ended");
+    }
+
+    /**
+     * Holds one capture open for a while (to see whether another app's call mic gets silenced by it):
+     * vc, mic, rec (voice recognition), raw (unprocessed), cam (camcorder), perf, loopback, none.
+     */
+    private static void probe(String what, int seconds) throws InterruptedException {
+        Sources.Capture c;
+        switch (what) {
+            case "vc": c = Sources.direct("vc", android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION); break;
+            case "vcns": c = Sources.direct("vcns", android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION, false); break;
+            case "mic": c = Sources.direct("mic", android.media.MediaRecorder.AudioSource.MIC); break;
+            case "rec": c = Sources.direct("rec", android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION); break;
+            case "raw": c = Sources.direct("raw", android.media.MediaRecorder.AudioSource.UNPROCESSED); break;
+            case "cam": c = Sources.direct("cam", android.media.MediaRecorder.AudioSource.CAMCORDER); break;
+            case "perf": c = Sources.direct("perf", android.media.MediaRecorder.AudioSource.VOICE_PERFORMANCE); break;
+            case "loopback": c = Sources.voipDownlink(); break;
+            default: c = null;
+        }
+        Log.i("probe " + what + " start");
+        short[] buf = new short[Sources.SAMPLE_RATE / 2];
+        long end = System.currentTimeMillis() + seconds * 1000L;
+        while (System.currentTimeMillis() < end) {
+            int peak = 0;
+            if (c != null) {
+                int n = c.record.read(buf, 0, buf.length, AudioRecord.READ_NON_BLOCKING);
+                for (int i = 0; i < n; i++) {
+                    peak = Math.max(peak, Math.abs((int) buf[i]));
+                }
+            }
+            Log.i("probe " + what + " own peak=" + peak);
+            Thread.sleep(500);
+        }
+        if (c != null) {
+            c.release();
+        }
+        Log.i("probe " + what + " end");
     }
 
     private static void audioInfo() {

@@ -20,7 +20,7 @@ import java.util.Locale;
  * honoring the companion app's .config.json and reporting to .status.json.
  */
 public final class Main {
-    public static final int VERSION = 5;
+    public static final int VERSION = 6;
 
     private static final long POLL_MS = 500;
     private static final int START_POLLS = 2; // call mode must hold for 1 s before recording
