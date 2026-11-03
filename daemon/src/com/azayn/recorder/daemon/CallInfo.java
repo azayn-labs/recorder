@@ -106,33 +106,58 @@ public final class CallInfo {
             return null;
         }
         String out = exec("dumpsys", "notification", "--noredact");
-        if (out == null) {
-            return null;
-        }
+        return out == null ? null : peerFromNotifications(out, pkg);
+    }
+
+    /**
+     * Parses `dumpsys notification --noredact`. Each NotificationRecord's header line carries its
+     * category; a call is category=call or a CallStyle template. The person is the main title: the
+     * nested publicNotification (the lock-screen copy) just says the app's name, so stop reading a
+     * record's titles there, and never take the app's own name as the person.
+     */
+    static String peerFromNotifications(String dump, String pkg) {
+        String appName = label(pkg);
         String fallback = null;
+        String title = null;
         boolean inPkg = false;
         boolean isCall = false;
-        for (String line : out.split("\n")) {
+        boolean inPublic = false;
+        for (String line : (dump + "\n    NotificationRecord(end: pkg=-)").split("\n")) {
             Matcher m = RECORD.matcher(line);
             if (m.find()) {
+                // Finish the previous record of this package.
+                if (inPkg && title != null) {
+                    if (isCall) {
+                        return title;
+                    }
+                    if (fallback == null) {
+                        fallback = title;
+                    }
+                }
                 inPkg = pkg.equals(m.group(1));
-                isCall = false;
+                isCall = line.contains("category=call");
+                inPublic = false;
+                title = null;
                 continue;
             }
             if (!inPkg) {
                 continue;
             }
-            if (line.contains("category=call") || line.contains("CallStyle")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("publicNotification=")) {
+                inPublic = true;
+            }
+            if (trimmed.contains("CallStyle")) {
                 isCall = true;
             }
-            Matcher t = TITLE.matcher(line.trim());
+            if (inPublic || title != null) {
+                continue;
+            }
+            Matcher t = TITLE.matcher(trimmed);
             if (t.find()) {
-                String title = t.group(1).trim();
-                if (isCall) {
-                    return title;
-                }
-                if (fallback == null) {
-                    fallback = title;
+                String found = t.group(1).trim();
+                if (!found.isEmpty() && !found.equalsIgnoreCase(appName)) {
+                    title = found;
                 }
             }
         }

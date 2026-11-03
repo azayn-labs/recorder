@@ -13,6 +13,12 @@ public final class SelfTest {
 
     public static void main(String[] args) throws Exception {
         Env.init();
+        if (args.length > 2 && args[0].equals("peer")) {
+            // Who would a call be named after, given a saved `dumpsys notification --noredact`?
+            String dump = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(args[1])));
+            Log.i("peer for " + args[2] + ": " + CallInfo.peerFromNotifications(dump, args[2]));
+            System.exit(0);
+        }
         if (args.length > 1 && args[0].equals("probe")) {
             probe(args[1], args.length > 2 ? Integer.parseInt(args[2]) : 8);
             System.exit(0);
