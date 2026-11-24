@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -118,18 +117,11 @@ fun SettingsScreen(
                     ) { Chevron() }
                     PanelDivider()
                     PanelRow(
-                        "Start after the phone restarts",
-                        hint = "When you're on Wi-Fi",
+                        "Start it again by itself",
+                        hint = "And when Wi-Fi comes back",
                         icon = Icons.Default.RestartAlt,
                         onClick = { RecorderControl.update(ctx, recorder.copy(autoStart = !recorder.autoStart)) },
                     ) { Switch(recorder.autoStart, { RecorderControl.update(ctx, recorder.copy(autoStart = it)) }) }
-                    PanelDivider()
-                    PanelRow(
-                        "Turn off Wireless debugging afterwards",
-                        hint = "The recorder keeps running; safer on shared Wi-Fi",
-                        icon = Icons.Default.WifiOff,
-                        onClick = { RecorderControl.update(ctx, recorder.copy(wirelessOffAfter = !recorder.wirelessOffAfter)) },
-                    ) { Switch(recorder.wirelessOffAfter, { RecorderControl.update(ctx, recorder.copy(wirelessOffAfter = it)) }) }
                     PanelDivider()
                 }
                 PanelRow(

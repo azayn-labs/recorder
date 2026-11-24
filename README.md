@@ -66,9 +66,8 @@ recorder as the shell user. That recorder is the only part that touches call aud
 Pairing gives the app the same access a computer with USB debugging has. It uses it for
 exactly two things, both in [`RecorderControl.kt`](android/app/src/main/java/com/azayn/recorder/RecorderControl.kt):
 granting itself the permissions in the table below, and starting the recorder. You can undo it
-any time: turn off Wireless debugging (the app does this itself after starting the recorder
-unless you change that in Settings), tap *Revoke adb debugging authorizations* in Developer
-options, or uninstall the app.
+any time: tap *Revoke adb debugging authorizations* in Developer options, or uninstall the
+app. (Turning off Wireless debugging also stops the recorder; see [Limitations](#limitations).)
 
 | Permission | Why |
 |---|---|
@@ -79,7 +78,7 @@ options, or uninstall the app.
 | Notifications | The live "recording" notification with Stop/Discard, and the pairing-code field |
 | Nearby devices / local network | Find your phone's Wireless debugging service on the Wi-Fi network |
 | Internet, network and Wi-Fi state | Connect to that service, which runs on the phone itself; nothing goes off the phone |
-| Modify secure settings | Granted during setup; turns Wireless debugging on to start the recorder after a restart, and off again |
+| Modify secure settings | Granted during setup; turns Wireless debugging on to start the recorder after a restart or when Wi-Fi comes back |
 | Run at startup, foreground service | Restart the recorder after a reboot or app update |
 
 ## How it works
@@ -90,8 +89,11 @@ So the recorder is a small Java daemon (`daemon/src`) started with `app_process`
 user (the same technique scrcpy uses). It's compiled into the APK, and the app launches it
 straight from its own `base.apk` over on-device ADB
 ([libadb-android](https://github.com/MuntashirAkon/libadb-android), shell v2 protocol so adbd
-doesn't kill it when the command returns). It runs on its own after that, until the phone
-restarts, even with Wireless debugging off.
+doesn't kill it when the command returns). It runs on its own after that, as long as adbd keeps
+running. Since the Android 17 update of November 2026, everything adbd starts lives in adbd's own
+cgroup, which the shell user can't leave, and init kills that cgroup when adbd stops. So the
+recorder stops when Wireless debugging goes off (Android also does that itself when Wi-Fi drops).
+The app leaves Wireless debugging on, and starts the recorder again whenever Wi-Fi comes back.
 
 The daemon checks the audio mode every 500 ms:
 
@@ -147,8 +149,8 @@ You can browse them in *My Files › Internal storage › CallRecorder*.
   as a status-bar chip and in Samsung's Now Bar. The voice recorder shows one too.
 - **Rename:** any recording can be renamed. This renames the file itself. The original date
   and time are kept and still shown.
-- **Settings tab:** recorder status; *Recorder* (start/restart, start after restart, turn
-  Wireless debugging off afterwards, pair again); a master "Record calls" switch and per-app
+- **Settings tab:** recorder status; *Recorder* (start/restart, start it again by itself after
+  a restart or when Wi-Fi comes back, pair again); a master "Record calls" switch and per-app
   switches (Phone, WhatsApp, Instagram, Facebook, Messenger, other apps); audio format; the
   **Never record** list (from contacts, or by name/username); appearance (System, Light, Dark);
   and About (version, source, license, *Support Azayn Recorder* on Ko-fi).
@@ -194,8 +196,11 @@ publishing a version, see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Limitations
 
-- **Wi-Fi to start.** Wireless debugging only works on Wi-Fi, so starting the recorder (first
-  setup, after a restart) needs it. Once running, the recorder works on any network.
+- **Wi-Fi.** Wireless debugging only works on Wi-Fi, and since the November 2026 Android 17
+  update the recorder only runs while Wireless debugging is on. Android turns Wireless debugging
+  off when Wi-Fi drops (leaving home, switching to mobile data), and the recorder stops with it.
+  Calls made away from Wi-Fi aren't recorded. The app starts the recorder again when Wi-Fi
+  comes back.
 - **Developer options stay on.** Turning them off disables Wireless debugging, so the app can't
   start the recorder after the next restart.
 - **After a restart** the recorder isn't running until the app starts it again (automatically

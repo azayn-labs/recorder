@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         UiPrefs.load(this)
         RecorderControl.load(this)
+        RecorderWatch.schedule(this)
         setContent {
             AzaynTheme { AuroraBackground { RecorderApp() } }
         }

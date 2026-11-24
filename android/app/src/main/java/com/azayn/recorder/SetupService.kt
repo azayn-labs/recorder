@@ -205,6 +205,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         android.util.Log.i("AzaynRecorder", "auto-start: ${intent.action}")
         RecorderControl.load(ctx)
+        RecorderWatch.schedule(ctx)
         val p = RecorderControl.prefs.value
         if (p.paired && p.autoStart) {
             ctx.startForegroundService(Intent(ctx, SetupService::class.java).setAction(SetupService.ACTION_BOOT))

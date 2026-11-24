@@ -20,7 +20,7 @@ import java.util.Locale;
  * honoring the companion app's .config.json and reporting to .status.json.
  */
 public final class Main {
-    public static final int VERSION = 7;
+    public static final int VERSION = 8;
 
     private static final long POLL_MS = 500;
     private static final int START_POLLS = 2; // call mode must hold for 1 s before recording
@@ -31,15 +31,15 @@ public final class Main {
 
     private static File root;
     private static Config config;
-    private static Recording current;
-    private static String currentPkg;
-    private static String currentPeer;
-    private static String currentNumber;
+    private static volatile Recording current;
+    private static volatile String currentPkg;
+    private static volatile String currentPeer;
+    private static volatile String currentNumber;
     /** Kind of a call we decided not to record; set until that call ends. */
-    private static Recording.Kind skipping;
-    private static String skipReason;
+    private static volatile Recording.Kind skipping;
+    private static volatile String skipReason;
     /** The user hit "Stop" on the notification: capture has ended but the call hasn't. */
-    private static boolean stoppedEarly;
+    private static volatile boolean stoppedEarly;
 
     private Main() {
     }
@@ -56,12 +56,26 @@ public final class Main {
         }));
         Notify.idle(); // clear a notification left over from a previous run
 
+        // Heartbeat on its own thread, so the app doesn't think we're gone while the main loop waits
+        // on a slow system call (dumpsys, the call log, starting a capture).
+        Thread heartbeat = new Thread(() -> {
+            while (true) {
+                writeStatus();
+                try {
+                    Thread.sleep(STATUS_MS);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }, "heartbeat");
+        heartbeat.setDaemon(true);
+        heartbeat.start();
+
         AudioManager am = CallInfo.audioManager();
         Recording.Kind pending = null;
         int pendingPolls = 0;
         int idlePolls = 0;
         long nextPeerCheck = 0;
-        long nextStatus = 0;
 
         while (true) {
             Recording.Kind kind = kindFor(am.getMode());
@@ -98,11 +112,6 @@ public final class Main {
                 finish();
             }
 
-            long now = System.currentTimeMillis();
-            if (now >= nextStatus) {
-                writeStatus();
-                nextStatus = now + STATUS_MS;
-            }
             Thread.sleep(POLL_MS);
         }
     }

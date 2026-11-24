@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -244,20 +245,43 @@ public final class CallInfo {
         return m.find() ? m.group(1) : null;
     }
 
+    private static final long EXEC_TIMEOUT_MS = 5_000;
+
+    /** Runs a command and returns its output, or null if it fails or takes over 5 s (then it's killed). */
     static String exec(String... cmd) {
+        Process p = null;
         try {
-            Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            Process proc = p;
             StringBuilder sb = new StringBuilder();
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-                String line;
-                while ((line = r.readLine()) != null) {
-                    sb.append(line).append('\n');
+            Thread reader = new Thread(() -> {
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        synchronized (sb) {
+                            sb.append(line).append('\n');
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // the process was killed
                 }
+            });
+            reader.setDaemon(true);
+            reader.start();
+            if (!p.waitFor(EXEC_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                Log.i("exec " + cmd[0] + ": timed out");
+                p.destroyForcibly();
+                return null;
             }
-            p.waitFor();
-            return sb.toString();
+            reader.join(1_000);
+            synchronized (sb) {
+                return sb.toString();
+            }
         } catch (Throwable t) {
             Log.d("exec " + cmd[0] + ": " + t);
+            if (p != null) {
+                p.destroyForcibly();
+            }
             return null;
         }
     }

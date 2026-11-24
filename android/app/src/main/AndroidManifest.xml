@@ -24,7 +24,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Granted over ADB during setup (not by the user); lets the app turn Wireless debugging
-         on to start the recorder after a reboot, and off again afterwards. -->
+         on to start the recorder after a reboot or when Wi-Fi comes back. -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
@@ -65,6 +65,15 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- Start the recorder again when Wi-Fi comes back (see RecorderWatch). -->
+        <receiver
+            android:name=".WifiReceiver"
+            android:exported="false" />
+        <service
+            android:name=".RecorderJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- Recording state from the call recorder daemon. DUMP: only adb shell/system can send. -->
         <receiver

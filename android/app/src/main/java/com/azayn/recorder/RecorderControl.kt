@@ -18,9 +18,9 @@ object RecorderControl {
     private const val PREFS = "recorder"
     private const val ADB_WIFI = "adb_wifi_enabled" // Settings.Global key behind "Wireless debugging"
 
-    data class Prefs(val paired: Boolean, val autoStart: Boolean, val wirelessOffAfter: Boolean)
+    data class Prefs(val paired: Boolean, val autoStart: Boolean)
 
-    private val _prefs = MutableStateFlow(Prefs(paired = false, autoStart = true, wirelessOffAfter = true))
+    private val _prefs = MutableStateFlow(Prefs(paired = false, autoStart = true))
     val prefs: StateFlow<Prefs> = _prefs
 
     /** Progress of a start or pairing, for the UI. Null when idle. */
@@ -28,7 +28,7 @@ object RecorderControl {
 
     fun load(ctx: Context) {
         val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        _prefs.value = Prefs(p.getBoolean("paired", false), p.getBoolean("autoStart", true), p.getBoolean("wirelessOffAfter", true))
+        _prefs.value = Prefs(p.getBoolean("paired", false), p.getBoolean("autoStart", true))
     }
 
     fun update(ctx: Context, prefs: Prefs) {
@@ -36,7 +36,7 @@ object RecorderControl {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean("paired", prefs.paired)
             .putBoolean("autoStart", prefs.autoStart)
-            .putBoolean("wirelessOffAfter", prefs.wirelessOffAfter)
+            .remove("wirelessOffAfter") // older builds turned Wireless debugging off after starting
             .apply()
     }
 
@@ -50,7 +50,7 @@ object RecorderControl {
         return cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     }
 
-    /** Granted to us over ADB during setup; lets us switch Wireless debugging on and off ourselves. */
+    /** Granted to us over ADB during setup; lets us switch Wireless debugging on ourselves. */
     private fun canToggleWireless(ctx: Context) =
         ctx.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
 
@@ -60,7 +60,14 @@ object RecorderControl {
     /**
      * Starts (or restarts) the daemon. Blocking; call off the main thread. Returns null on success,
      * else a message for the user.
+     *
+     * Wireless debugging has to stay on afterwards: since the Nov 2026 Android 17 update, everything
+     * adbd starts lives in adbd's own cgroup (system/uid_0/pid_<adbd>, which the shell user can't
+     * leave), and init kills that whole cgroup when adbd stops. setsid/nohup don't help. Android also
+     * turns Wireless debugging off when Wi-Fi drops, so [RecorderWatch] starts the recorder again when
+     * Wi-Fi comes back.
      */
+    @Synchronized
     fun start(ctx: Context): String? = try {
         busy.value = "Starting the recorder…"
         doStart(ctx).also { android.util.Log.i("AzaynRecorder", "start: ${it ?: "ok"}") }
@@ -71,10 +78,8 @@ object RecorderControl {
     private fun doStart(ctx: Context): String? {
         if (!prefs.value.paired) return "Set up the recorder first: pair with Wireless debugging."
         if (!onWifi(ctx)) return "Connect to Wi-Fi. Wireless debugging only works on Wi-Fi."
-        var turnedOn = false
         if (!wirelessDebuggingOn(ctx)) {
             if (!canToggleWireless(ctx) || !setWireless(ctx, true)) return "Turn on Wireless debugging in Developer options."
-            turnedOn = true
             Thread.sleep(2500) // adbd needs a moment to start listening
         }
         busy.value = "Connecting…"
@@ -91,9 +96,7 @@ object RecorderControl {
         } finally {
             Adb.disconnect(ctx)
         }
-        val running = waitForHeartbeat()
-        if (prefs.value.wirelessOffAfter && (turnedOn || canToggleWireless(ctx))) setWireless(ctx, false)
-        return if (running) null else "The recorder didn't start. Try again."
+        return if (waitForHeartbeat()) null else "The recorder didn't start. Try again."
     }
 
     /** One-time grants the setup needs; harmless to repeat. */
@@ -123,11 +126,19 @@ object RecorderControl {
             ">/data/local/tmp/callrec.log 2>&1 </dev/null & echo started"
     }
 
+    /**
+     * True once the new daemon has written two heartbeats a few seconds apart. One isn't enough: a
+     * daemon that's killed right after starting (see [start]) still writes its first one.
+     */
     private fun waitForHeartbeat(): Boolean {
         val since = System.currentTimeMillis()
-        repeat(20) {
+        var first: Long? = null
+        repeat(40) {
             val s = Store.status()
-            if (s.running && s.heartbeat >= since - 1000) return true
+            if (s.running && s.heartbeat >= since - 1000) {
+                val f = first ?: s.heartbeat.also { first = it }
+                if (s.heartbeat >= f + 3000) return true
+            }
             Thread.sleep(500)
         }
         return false
